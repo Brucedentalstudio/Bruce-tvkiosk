@@ -12,18 +12,21 @@ nhất là cắm thêm một máy chạy Linux vào HDMI. TV chỉ còn làm vi�
 
 | Máy | Ưu | Nhược |
 |---|---|---|
-| **Raspberry Pi 5 (4 GB)** + nguồn, vỏ có quạt, thẻ nhớ 32 GB | Bật/tắt TV theo giờ qua HDMI-CEC (Anynet+), rẻ, tiêu thụ ít điện | Thẻ nhớ có thể hỏng sau vài năm: dùng thẻ loại tốt |
-| **Mini PC Intel N100** | Mạnh hơn, ổ SSD bền hơn thẻ nhớ | Đắt hơn, đa số không có CEC nên không hẹn giờ bật/tắt TV được |
+| **Mini PC cũ chip Intel** (ví dụ Dell OptiPlex 3050 **Micro**, i3/i5 đời 7, RAM 8 GB, SSD) | Ổ SSD bền hơn thẻ nhớ, dư sức, card Intel chạy tốt trên Linux | Phải bật **AC Recovery = Power On** trong BIOS; không có HDMI-CEC |
+| **Raspberry Pi 5 (4 GB)** + nguồn 27W, tản nhiệt có quạt, thẻ nhớ loại chịu ghi liên tục | Máy mới có bảo hành, có điện là tự lên, bật/tắt TV qua HDMI-CEC | Thẻ nhớ kém bền hơn SSD; cần cáp micro-HDMI |
 
-Chọn Pi 5 nếu cần bật/tắt màn theo ca. Giá tham khảo tự kiểm tra lại khi mua.
+TV để bật liên tục và ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
+được, chọn loại rẻ hơn ở thời điểm mua. Tránh máy có card đồ hoạ rời (ví dụ HP Z2 Mini có Quadro):
+tốn điện và dễ lỗi driver với giao diện kiosk.
 
 ## Cài đặt (khoảng 20 phút mỗi TV)
 
-1. Cài **Raspberry Pi OS Lite (64-bit)** bằng Raspberry Pi Imager. Trong Imager, đặt sẵn
-   Wi-Fi (hoặc cắm dây LAN, ổn định hơn), tên máy (ví dụ `tv-xuong-1`) và **bật SSH**.
-2. Trên TV Samsung: Cài đặt → Kết nối → Quản lý thiết bị ngoài → bật **Anynet+ (HDMI-CEC)**.
-   Đặt TV tự chuyển sang đúng cổng HDMI khi có tín hiệu.
-3. Mở `smilelog-tv.conf.example`, kiểm tra `TV_URL`, giờ bật/tắt và webhook báo động.
+1. Cài hệ điều hành, đặt tên máy (ví dụ `tv-xuong-1`), bật SSH, nên cắm dây LAN:
+   - Raspberry Pi: **Raspberry Pi OS Lite (64-bit)** bằng Raspberry Pi Imager.
+   - Mini PC: **Debian 12** bản không giao diện (bỏ chọn desktop, chọn SSH server). Vào BIOS bật
+     **AC Recovery = Power On** để mất điện có lại là máy tự lên.
+2. Cài đặt TV Samsung (xem mục bên dưới).
+3. Mở `smilelog-tv.conf.example`, kiểm tra `TV_URL`, giờ làm việc và webhook báo động.
 4. Chép thư mục này lên máy và cài:
 
    ```bash
@@ -33,6 +36,19 @@ Chọn Pi 5 nếu cần bật/tắt màn theo ca. Giá tham khảo tự kiểm t
    ```
 
 5. Đăng nhập Smilelog một lần (xem bên dưới), rồi `sudo reboot` để chắc chắn máy tự vào Màn TV.
+
+## Cài đặt TV Samsung khi để bật liên tục
+
+Tên mục có thể khác theo đời TV. Không tắt các mục này thì TV tự tắt hoặc tự hiện màn chờ của nó:
+
+- **Tự động tắt nguồn** (Auto Power Off, thường trong *Chung → Giải pháp tiết kiệm năng lượng*):
+  **Tắt**. Mặc định TV tự tắt sau 4 giờ không ai bấm remote.
+- **Tắt khi không có tín hiệu** (No Signal Power Off): **Tắt**.
+- **Thời gian bảo vệ tự động** (Auto Protection Time): **Tắt**. Màn chờ đã do máy chiếu lo.
+- Nguồn vào: chọn đúng cổng HDMI cắm máy; nếu có **Anynet+ (HDMI-CEC)** thì bật để TV tự chuyển cổng.
+- Độ sáng: giảm xuống khoảng 60–70% để TV bền hơn khi chạy cả ngày.
+- TV **OLED** (dòng S90, S95) dễ lưu ảnh khi chiếu bảng cố định nhiều giờ. TV LED/QLED thông
+  thường không bị vấn đề này.
 
 ## Đăng nhập lần đầu
 
@@ -53,7 +69,9 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
 | Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
-| Giờ tan ca / vào ca | Tắt / bật TV qua HDMI-CEC (chỉ Raspberry Pi) |
+| Ngoài giờ làm (`WORK_START`–`WORK_END`, `WORK_DAYS`) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
+| Vào giờ làm | Tự quay về Màn TV (trong vòng 1 phút) |
+| Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
 | Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
 

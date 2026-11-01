@@ -11,6 +11,7 @@ CONF=${SMILELOG_TV_CONF:-/etc/smilelog-tv.conf}
 PROFILE=${SMILELOG_TV_PROFILE:-/var/lib/smilelog-tv/profile}
 STATE=${SMILELOG_TV_STATE:-/run/smilelog-tv}
 DEVTOOLS=${SMILELOG_TV_DEVTOOLS:-http://127.0.0.1:9222}
+SAVER_URL=${SMILELOG_TV_SAVER_URL:-file:///usr/local/share/smilelog-tv/screensaver.html}
 
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
@@ -32,6 +33,28 @@ bump() {
   n=$((n + 1))
   echo "$n" >"$f"
   echo "$n"
+}
+
+# Đang trong giờ làm việc thì chiếu Màn TV, ngoài giờ thì chiếu màn chờ.
+# WORK_START/WORK_END trống: luôn chiếu Màn TV. Hỗ trợ ca qua đêm (WORK_START > WORK_END).
+in_work_hours() {
+  [ -n "${WORK_START:-}" ] && [ -n "${WORK_END:-}" ] || return 0
+  local now day
+  now=$(date +%H:%M)
+  day=$(date +%u)
+  case ",${WORK_DAYS:-1,2,3,4,5,6,7}," in
+    *",$day,"*) ;;
+    *) return 1 ;;
+  esac
+  if [[ "$WORK_START" < "$WORK_END" ]]; then
+    [[ ! "$now" < "$WORK_START" && "$now" < "$WORK_END" ]]
+  else
+    [[ ! "$now" < "$WORK_START" || "$now" < "$WORK_END" ]]
+  fi
+}
+
+desired_url() {
+  if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
 }
 
 restart_browser() {
@@ -68,12 +91,11 @@ cmd_browser() {
     --check-for-update-interval=31536000 \
     --overscroll-history-navigation=0 --disable-pinch \
     --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
-    "$TV_URL"
+    "$(desired_url)"
 }
 
 cmd_watchdog() {
   mkdir -p "$STATE"
-  # Đang trong giờ tắt màn thì vẫn giám sát: TV tắt nhưng trang phải sẵn sàng khi bật.
   local json url
   if ! json=$(curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null); then
     # Chromium chưa lên hoặc đã treo. Cho 3 phút trước khi mở lại (lúc khởi động máy cần thời gian).
@@ -85,7 +107,19 @@ cmd_watchdog() {
   rm -f "$STATE/fail-devtools"
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
 
+  # Ngoài giờ làm: chỉ cần đang ở màn chờ; trang khác (kể cả Màn TV) thì chuyển sang màn chờ.
+  if ! in_work_hours; then
+    case "$url" in
+      "$SAVER_URL"*) rm -f "$STATE"/fail-* ;;
+      *) restart_browser "ngoài giờ làm, chuyển sang màn chờ" ;;
+    esac
+    return 0
+  fi
+
   case "$url" in
+    "$SAVER_URL"*)
+      restart_browser "vào giờ làm, chuyển sang Màn TV"
+      ;;
     # Xét trang login trước: URL login thường mang theo returnUrl=/production-tv.
     *"$LOGIN_PATTERN"*)
       # Khởi động lại không giúp được gì: cần người đăng nhập lại. Chỉ báo một lần.
@@ -121,6 +155,7 @@ cmd_screen() {
 cmd_status() {
   systemctl --no-pager --lines=0 status smilelog-tv.service || true
   echo
+  if in_work_hours; then echo "Chế độ: giờ làm (Màn TV)"; else echo "Chế độ: ngoài giờ (màn chờ)"; fi
   echo "Trang đang mở:"
   curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null |
     jq -r '.[] | select(.type == "page") | "  " + .url' || echo "  (trình duyệt không phản hồi)"

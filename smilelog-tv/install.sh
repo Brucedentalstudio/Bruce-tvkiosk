@@ -25,6 +25,12 @@ echo "==> Cấu hình"
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
 install -m 755 "$HERE/smilelog-tv" /usr/local/bin/smilelog-tv
+install -D -m 644 "$HERE/screensaver.html" /usr/local/share/smilelog-tv/screensaver.html
+
+if [ -n "${TIMEZONE:-}" ]; then
+  timedatectl set-timezone "$TIMEZONE"
+  echo "    Múi giờ: $TIMEZONE"
+fi
 
 echo "==> Tài khoản chạy kiosk"
 id "$KIOSK_USER" >/dev/null 2>&1 ||

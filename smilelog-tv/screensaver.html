@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Smilelog TV · Màn chờ</title>
+<style>
+  /* Màn chờ ngoài giờ: nền đen, chữ xám tối, khối chữ trôi chỗ mỗi phút để TV không lưu ảnh. */
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  body { font-family: system-ui, "DejaVu Sans", sans-serif; color: #7a7a7a; }
+  #block { position: absolute; text-align: center; transition: opacity 1.5s ease; }
+  #time { font-size: 14vw; font-weight: 200; line-height: 1; letter-spacing: -0.02em; }
+  #date { font-size: 2.6vw; margin-top: 1.2vw; font-weight: 300; }
+  #note { font-size: 1.4vw; margin-top: 2.4vw; color: #4a4a4a; }
+</style>
+</head>
+<body>
+<div id="block">
+  <div id="time"></div>
+  <div id="date"></div>
+  <div id="note"></div>
+</div>
+<script>
+  const block = document.getElementById('block');
+  const until = new URLSearchParams(location.search).get('until');
+  document.getElementById('note').textContent =
+    'Ngoài giờ làm việc' + (until ? ' · Màn TV mở lại lúc ' + until + ' ngày làm việc' : '');
+
+  function tick() {
+    const now = new Date();
+    document.getElementById('time').textContent =
+      now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const date = now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' });
+    document.getElementById('date').textContent = date.charAt(0).toUpperCase() + date.slice(1);
+  }
+
+  // Mờ dần, đổi chỗ ngẫu nhiên trong khung hình, hiện lại.
+  function drift() {
+    block.style.opacity = 0;
+    setTimeout(() => {
+      const maxX = Math.max(0, innerWidth - block.offsetWidth);
+      const maxY = Math.max(0, innerHeight - block.offsetHeight);
+      block.style.left = Math.round(Math.random() * maxX) + 'px';
+      block.style.top = Math.round(Math.random() * maxY) + 'px';
+      block.style.opacity = 1;
+    }, 1600);
+  }
+
+  tick();
+  drift();
+  setInterval(tick, 1000);
+  setInterval(drift, 60000);
+</script>
+</body>
+</html>

@@ -15,10 +15,20 @@ LOGIN_PATTERN="login"
 # Để trống để dùng độ phân giải mặc định của TV. Đổi xong cần khởi động lại máy.
 RESOLUTION="1920x1080"
 
-# Hẹn giờ bật/tắt TV qua HDMI-CEC (Samsung gọi là Anynet+).
-# Chỉ chạy được trên Raspberry Pi (có /dev/cec0). Để trống để không hẹn giờ.
-SCREEN_ON="07:00"
-SCREEN_OFF="19:30"
+# Múi giờ của máy: giờ làm việc, màn chờ và giờ khởi động lại đều tính theo múi này.
+TIMEZONE="Asia/Ho_Chi_Minh"
+
+# Giờ làm việc: trong giờ chiếu Màn TV, ngoài giờ chiếu màn chờ (đồng hồ trôi trên nền đen)
+# để TV không lưu ảnh và không lộ số liệu khi xưởng vắng. Để trống WORK_START để luôn chiếu Màn TV.
+# WORK_DAYS: 1 = thứ 2 ... 7 = chủ nhật. Ca qua đêm thì đặt WORK_START lớn hơn WORK_END.
+WORK_START="07:00"
+WORK_END="19:30"
+WORK_DAYS="1,2,3,4,5,6"
+
+# Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
+# Mặc định để trống: TV luôn bật, ngoài giờ đã có màn chờ.
+SCREEN_ON=""
+SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"
 
 # Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.

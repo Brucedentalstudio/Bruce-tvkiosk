@@ -13,6 +13,7 @@ done
 systemctl daemon-reload
 systemctl enable getty@tty1.service 2>/dev/null || true
 rm -f /usr/local/bin/smilelog-tv
+rm -rf /usr/local/share/smilelog-tv
 # Trả lại độ phân giải mặc định trên Raspberry Pi.
 CMDLINE=/boot/firmware/cmdline.txt
 if [ -f "$CMDLINE" ]; then sed -i -E 's/ ?video=HDMI-A-1:[^ ]*//g' "$CMDLINE"; fi
