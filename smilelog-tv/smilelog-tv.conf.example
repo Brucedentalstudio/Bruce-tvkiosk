@@ -1,0 +1,25 @@
+# Cấu hình máy chiếu Màn TV Smilelog.
+# install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
+# Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
+
+# Trang mở khi bật máy. Kiểm tra lại tên miền Prod trước khi dùng.
+TV_URL="https://smilelog.vn/production-tv"
+
+# Đường dẫn được coi là "đúng màn". Trang khác (lỗi mạng, trang lạ) bị watchdog mở lại.
+EXPECTED_PATH="/production-tv"
+
+# URL chứa chuỗi này được coi là trang đăng nhập: watchdog báo động, không khởi động lại.
+LOGIN_PATTERN="login"
+
+# Hẹn giờ bật/tắt TV qua HDMI-CEC (Samsung gọi là Anynet+).
+# Chỉ chạy được trên Raspberry Pi (có /dev/cec0). Để trống để không hẹn giờ.
+SCREEN_ON="07:00"
+SCREEN_OFF="19:30"
+SCREEN_DAYS="Mon..Sat"
+
+# Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
+REBOOT_AT="03:30"
+
+# Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
+# Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).
+ALERT_WEBHOOK=""
