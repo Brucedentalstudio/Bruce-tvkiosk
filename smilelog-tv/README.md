@@ -54,6 +54,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
 | Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
 | Giờ tan ca / vào ca | Tắt / bật TV qua HDMI-CEC (chỉ Raspberry Pi) |
+| Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
 | Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
 
 ## Lệnh hay dùng

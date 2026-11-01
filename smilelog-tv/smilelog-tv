@@ -48,6 +48,16 @@ cmd_browser() {
     sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]*"/"exit_type":"Normal"/' \
       "$PROFILE/Default/Preferences"
   fi
+  # Đặt độ phân giải trong phiên cage. Thất bại (cage cũ, TV không hỗ trợ) thì giữ chế độ hiện tại.
+  if [ -n "${RESOLUTION:-}" ] && command -v wlr-randr >/dev/null; then
+    local output
+    output=$(wlr-randr 2>/dev/null | awk 'NR == 1 {print $1}')
+    if [ -n "$output" ]; then
+      wlr-randr --output "$output" --mode "${RESOLUTION}@60Hz" 2>/dev/null ||
+        wlr-randr --output "$output" --mode "$RESOLUTION" 2>/dev/null ||
+        log "Không đặt được độ phân giải $RESOLUTION trên $output"
+    fi
+  fi
   exec "$browser" \
     --kiosk --ozone-platform=wayland \
     --user-data-dir="$PROFILE" \

@@ -11,6 +11,10 @@ EXPECTED_PATH="/production-tv"
 # URL chứa chuỗi này được coi là trang đăng nhập: watchdog báo động, không khởi động lại.
 LOGIN_PATTERN="login"
 
+# Độ phân giải xuất ra TV. 1080p giúp Pi chạy mát và mượt hơn 4K; ở 55" nhìn xa không thấy khác.
+# Để trống để dùng độ phân giải mặc định của TV. Đổi xong cần khởi động lại máy.
+RESOLUTION="1920x1080"
+
 # Hẹn giờ bật/tắt TV qua HDMI-CEC (Samsung gọi là Anynet+).
 # Chỉ chạy được trên Raspberry Pi (có /dev/cec0). Để trống để không hẹn giờ.
 SCREEN_ON="07:00"

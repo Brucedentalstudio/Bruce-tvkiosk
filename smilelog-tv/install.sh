@@ -16,6 +16,9 @@ echo "==> Cài gói"
 apt-get update -q
 if apt-cache show chromium >/dev/null 2>&1; then BROWSER_PKG=chromium; else BROWSER_PKG=chromium-browser; fi
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q cage "$BROWSER_PKG" jq curl v4l-utils
+# wlr-randr đổi độ phân giải ngay trong phiên kiosk; bản phân phối cũ có thể không có gói này.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q wlr-randr ||
+  echo "    Không cài được wlr-randr: độ phân giải chỉ đặt qua cmdline.txt"
 
 echo "==> Cấu hình"
 [ -f "$CONF" ] || install -m 644 "$HERE/smilelog-tv.conf.example" "$CONF"
@@ -128,6 +131,24 @@ else
   schedule screen-off "" "" ""
 fi
 schedule reboot "${REBOOT_AT:-}" "/bin/systemctl reboot" "khởi động lại"
+
+echo "==> Độ phân giải"
+# Trên Raspberry Pi, tham số video= trong cmdline.txt đặt chế độ hình cho cổng HDMI0 từ lúc khởi động.
+CMDLINE=/boot/firmware/cmdline.txt
+NEED_REBOOT=""
+if [ -f "$CMDLINE" ]; then
+  [ -f "$CMDLINE.smilelog-tv.bak" ] || cp "$CMDLINE" "$CMDLINE.smilelog-tv.bak"
+  old=$(cat "$CMDLINE")
+  new=$(sed -E 's/ ?video=HDMI-A-1:[^ ]*//g' "$CMDLINE")
+  [ -n "${RESOLUTION:-}" ] && new="$new video=HDMI-A-1:${RESOLUTION}@60"
+  if [ "$new" != "$old" ]; then
+    echo "$new" >"$CMDLINE"
+    NEED_REBOOT=1
+  fi
+  echo "    ${RESOLUTION:-mặc định của TV}${NEED_REBOOT:+ (có hiệu lực sau khi khởi động lại)}"
+else
+  echo "    Không phải Raspberry Pi: chỉ đặt độ phân giải trong phiên kiosk (wlr-randr)"
+fi
 
 systemctl restart smilelog-tv.service
 
