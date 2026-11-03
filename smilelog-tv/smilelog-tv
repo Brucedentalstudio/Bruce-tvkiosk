@@ -1,0 +1,175 @@
+#!/bin/bash
+# smilelog-tv: chạy và giám sát Màn TV Smilelog ở chế độ kiosk.
+#   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
+#   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
+#   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
+#   smilelog-tv status       xem tình trạng và log gần nhất
+#   smilelog-tv restart      mở lại trình duyệt
+set -euo pipefail
+
+CONF=${SMILELOG_TV_CONF:-/etc/smilelog-tv.conf}
+PROFILE=${SMILELOG_TV_PROFILE:-/var/lib/smilelog-tv/profile}
+STATE=${SMILELOG_TV_STATE:-/run/smilelog-tv}
+DEVTOOLS=${SMILELOG_TV_DEVTOOLS:-http://127.0.0.1:9222}
+SAVER_URL=${SMILELOG_TV_SAVER_URL:-file:///usr/local/share/smilelog-tv/screensaver.html}
+
+# shellcheck source=smilelog-tv.conf.example
+. "$CONF"
+
+log() { logger -t smilelog-tv -- "$*" 2>/dev/null || true; echo "$*" >&2; }
+
+alert() {
+  log "BÁO ĐỘNG: $*"
+  [ -n "${ALERT_WEBHOOK:-}" ] || return 0
+  jq -nc --arg t "[Smilelog TV $(hostname)] $*" '{text: $t}' |
+    curl -fsS --max-time 10 -H 'Content-Type: application/json' -d @- "$ALERT_WEBHOOK" >/dev/null ||
+    log "Không gửi được webhook"
+}
+
+# Đếm số lần lỗi liên tiếp của một loại lỗi; in ra số đếm mới.
+bump() {
+  local f="$STATE/$1" n=0
+  [ -f "$f" ] && n=$(cat "$f")
+  n=$((n + 1))
+  echo "$n" >"$f"
+  echo "$n"
+}
+
+# Đang trong giờ làm việc thì chiếu Màn TV, ngoài giờ thì chiếu màn chờ.
+# WORK_START/WORK_END trống: luôn chiếu Màn TV. Hỗ trợ ca qua đêm (WORK_START > WORK_END).
+in_work_hours() {
+  [ -n "${WORK_START:-}" ] && [ -n "${WORK_END:-}" ] || return 0
+  local now day
+  now=$(date +%H:%M)
+  day=$(date +%u)
+  case ",${WORK_DAYS:-1,2,3,4,5,6,7}," in
+    *",$day,"*) ;;
+    *) return 1 ;;
+  esac
+  if [[ "$WORK_START" < "$WORK_END" ]]; then
+    [[ ! "$now" < "$WORK_START" && "$now" < "$WORK_END" ]]
+  else
+    [[ ! "$now" < "$WORK_START" || "$now" < "$WORK_END" ]]
+  fi
+}
+
+desired_url() {
+  if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
+}
+
+restart_browser() {
+  log "Mở lại trình duyệt: $*"
+  rm -f "$STATE"/fail-*
+  systemctl restart smilelog-tv.service
+}
+
+cmd_browser() {
+  local browser
+  browser=$(command -v chromium || command -v chromium-browser) || { log "Chưa cài Chromium"; exit 1; }
+  # Lần tắt đột ngột trước (mất điện) làm Chromium hiện thanh "Khôi phục trang": xoá cờ đó.
+  if [ -f "$PROFILE/Default/Preferences" ]; then
+    sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]*"/"exit_type":"Normal"/' \
+      "$PROFILE/Default/Preferences"
+  fi
+  # Đặt độ phân giải trong phiên cage. Thất bại (cage cũ, TV không hỗ trợ) thì giữ chế độ hiện tại.
+  if [ -n "${RESOLUTION:-}" ] && command -v wlr-randr >/dev/null; then
+    local output
+    output=$(wlr-randr 2>/dev/null | awk 'NR == 1 {print $1}')
+    if [ -n "$output" ]; then
+      wlr-randr --output "$output" --mode "${RESOLUTION}@60Hz" 2>/dev/null ||
+        wlr-randr --output "$output" --mode "$RESOLUTION" 2>/dev/null ||
+        log "Không đặt được độ phân giải $RESOLUTION trên $output"
+    fi
+  fi
+  exec "$browser" \
+    --kiosk --ozone-platform=wayland \
+    --user-data-dir="$PROFILE" \
+    --no-first-run --noerrdialogs --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=Translate,TranslateUI \
+    --password-store=basic \
+    --check-for-update-interval=31536000 \
+    --overscroll-history-navigation=0 --disable-pinch \
+    --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
+    "$(desired_url)"
+}
+
+cmd_watchdog() {
+  mkdir -p "$STATE"
+  local json url
+  if ! json=$(curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null); then
+    # Chromium chưa lên hoặc đã treo. Cho 3 phút trước khi mở lại (lúc khởi động máy cần thời gian).
+    if [ "$(bump fail-devtools)" -ge 3 ]; then
+      restart_browser "trình duyệt không phản hồi"
+    fi
+    return 0
+  fi
+  rm -f "$STATE/fail-devtools"
+  url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
+
+  # Ngoài giờ làm: chỉ cần đang ở màn chờ; trang khác (kể cả Màn TV) thì chuyển sang màn chờ.
+  if ! in_work_hours; then
+    case "$url" in
+      "$SAVER_URL"*) rm -f "$STATE"/fail-* ;;
+      *) restart_browser "ngoài giờ làm, chuyển sang màn chờ" ;;
+    esac
+    return 0
+  fi
+
+  case "$url" in
+    "$SAVER_URL"*)
+      restart_browser "vào giờ làm, chuyển sang Màn TV"
+      ;;
+    # Xét trang login trước: URL login thường mang theo returnUrl=/production-tv.
+    *"$LOGIN_PATTERN"*)
+      # Khởi động lại không giúp được gì: cần người đăng nhập lại. Chỉ báo một lần.
+      if [ ! -f "$STATE/alerted-login" ]; then
+        alert "TV đang ở trang đăng nhập, cần đăng nhập lại ($url)"
+        touch "$STATE/alerted-login"
+      fi
+      ;;
+    *"$EXPECTED_PATH"*)
+      [ -f "$STATE/alerted-login" ] && log "Đã vào lại Màn TV"
+      rm -f "$STATE"/fail-* "$STATE/alerted-login"
+      ;;
+    *)
+      # Trang lỗi mạng, trang trắng, hoặc ai đó bấm sang trang khác.
+      if [ "$(bump fail-page)" -ge 2 ]; then
+        restart_browser "đang ở trang lạ: ${url:-<không có trang>}"
+      fi
+      ;;
+  esac
+}
+
+cmd_screen() {
+  local dev=/dev/cec0
+  [ -e "$dev" ] || { log "Không có $dev: máy này không điều khiển TV qua HDMI-CEC được"; exit 1; }
+  cec-ctl -d "$dev" --playback >/dev/null
+  case "${1:-}" in
+    on)  cec-ctl -d "$dev" --to 0 --image-view-on >/dev/null && log "Đã bật TV" ;;
+    off) cec-ctl -d "$dev" --to 0 --standby >/dev/null && log "Đã tắt TV" ;;
+    *)   echo "Dùng: smilelog-tv screen on|off" >&2; exit 2 ;;
+  esac
+}
+
+cmd_status() {
+  systemctl --no-pager --lines=0 status smilelog-tv.service || true
+  echo
+  if in_work_hours; then echo "Chế độ: giờ làm (Màn TV)"; else echo "Chế độ: ngoài giờ (màn chờ)"; fi
+  echo "Trang đang mở:"
+  curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null |
+    jq -r '.[] | select(.type == "page") | "  " + .url' || echo "  (trình duyệt không phản hồi)"
+  echo
+  systemctl --no-pager list-timers 'smilelog-tv-*' || true
+  echo
+  journalctl -t smilelog-tv -n 20 --no-pager || true
+}
+
+case "${1:-}" in
+  browser)  cmd_browser ;;
+  watchdog) cmd_watchdog ;;
+  screen)   shift; cmd_screen "$@" ;;
+  status)   cmd_status ;;
+  restart)  restart_browser "theo lệnh" ;;
+  *) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
