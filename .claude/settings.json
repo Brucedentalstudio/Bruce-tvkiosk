@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "bruce-claude-team": {
+      "source": {
+        "source": "github",
+        "repo": "Brucedentalstudio/bruce-claude-team"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "bruce-team@bruce-claude-team": true
+  }
+}
