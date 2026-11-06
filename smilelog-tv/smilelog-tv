@@ -1,6 +1,7 @@
 #!/bin/bash
 # smilelog-tv: chạy và giám sát Màn TV Smilelog ở chế độ kiosk.
-#   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
+#   smilelog-tv kiosk        chờ card đồ hoạ và mạng sẵn sàng rồi mở cage (systemd gọi, không chạy tay)
+#   smilelog-tv browser      mở Chromium toàn màn hình (cage gọi, không chạy tay)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
@@ -61,6 +62,41 @@ restart_browser() {
   log "Mở lại trình duyệt: $*"
   rm -f "$STATE"/fail-*
   systemctl restart smilelog-tv.service
+}
+
+# Lúc mới bật máy, driver card đồ hoạ (ví dụ i915) có thể chưa tạo xong /dev/dri/card*. Mở cage
+# lúc đó thì cage 0.2.0 báo "Failed to open device ... Resource temporarily unavailable" rồi treo
+# chứ không thoát, nên Restart= của systemd không cứu được. Chờ có cổng hình báo "connected"
+# (driver đã đăng ký xong card), rồi chờ udev xử lý xong thiết bị.
+wait_display() {
+  local i
+  for i in $(seq 60); do
+    grep -qsx connected /sys/class/drm/card*-*/status && break
+    [ "$i" -lt 60 ] || log "Sau 60 giây không thấy TV nào cắm vào cổng hình, vẫn mở kiosk"
+    sleep 1
+  done
+  udevadm settle --timeout=15 || true
+}
+
+# Mở trang khi chưa có mạng thì Smilelog không kiểm tra được phiên đăng nhập, chuyển sang trang
+# đăng nhập và đứng luôn ở đó. After=network-online.target không đủ: wifi khai báo allow-hotplug
+# (kiểu bộ cài Debian tạo) được bật sau khi network-online.target đã báo xong.
+wait_network() {
+  local origin end=$((SECONDS + 90))
+  origin=$(sed -E 's|^(https?://[^/?#]+).*|\1|' <<<"$TV_URL")
+  until curl -sS -o /dev/null --max-time 3 "$origin/" 2>/dev/null; do
+    if [ "$SECONDS" -ge "$end" ]; then
+      log "Sau 90 giây vẫn chưa vào được $origin, vẫn mở trình duyệt"
+      return 0
+    fi
+    sleep 2
+  done
+}
+
+cmd_kiosk() {
+  wait_display
+  wait_network
+  exec /usr/bin/cage -s -- "$0" browser
 }
 
 cmd_browser() {
@@ -166,10 +202,11 @@ cmd_status() {
 }
 
 case "${1:-}" in
+  kiosk)    cmd_kiosk ;;
   browser)  cmd_browser ;;
   watchdog) cmd_watchdog ;;
   screen)   shift; cmd_screen "$@" ;;
   status)   cmd_status ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

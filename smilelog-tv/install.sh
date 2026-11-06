@@ -61,7 +61,7 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/usr/bin/cage -s -- /usr/local/bin/smilelog-tv browser
+ExecStart=/usr/local/bin/smilelog-tv kiosk
 Restart=always
 RestartSec=5
 

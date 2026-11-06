@@ -64,7 +64,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 | Tình huống | Xử lý |
 |---|---|
-| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `TV_URL` |
+| Bật điện, mất điện rồi có lại | Chờ card đồ hoạ và mạng sẵn sàng (tối đa 60 và 90 giây), rồi tự mở Chromium toàn màn hình vào `TV_URL` |
 | Mất mạng ngắn | Smilelog tự hiện "Mất kết nối" và tự tải lại sau 10 phút |
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
