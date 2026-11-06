@@ -156,7 +156,7 @@ cmd_watchdog() {
     "$SAVER_URL"*)
       restart_browser "vào giờ làm, chuyển sang Màn TV"
       ;;
-    # Xét trang login trước: URL login thường mang theo returnUrl=/production-tv.
+    # Xét trang login trước: URL login mang theo redirectUrl=/production-tv.
     *"$LOGIN_PATTERN"*)
       # Khởi động lại không giúp được gì: cần người đăng nhập lại. Chỉ báo một lần.
       if [ ! -f "$STATE/alerted-login" ]; then
