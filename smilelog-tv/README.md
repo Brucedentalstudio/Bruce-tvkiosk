@@ -1,8 +1,27 @@
 # Smilelog TV: máy chiếu Màn TV sản xuất
 
-Biến một máy tính nhỏ cắm vào cổng HDMI của TV thành màn hình kiosk chỉ chạy
-`/production-tv` của Smilelog. Bật điện là tự vào màn sản xuất, mất điện hay trình duyệt treo
-thì tự hồi phục, hết phiên đăng nhập thì báo động.
+Biến một máy tính nhỏ cắm vào cổng HDMI của TV thành màn hình kiosk chạy Smilelog. Bật điện là
+tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục.
+
+## Hai chế độ
+
+| | `tv` (mặc định) | `full` |
+|---|---|---|
+| Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối: có bàn phím, chuột |
+| Mở trang | `TV_URL` (`/production-tv`) | `APP_URL` (trang chủ Smilelog), đi được khắp phần mềm |
+| Bấm sang trang khác | Sau 2 phút tự quay về Màn TV | Được phép, miễn còn trong Smilelog (`APP_HOSTS`) |
+| Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường, người dùng tự đăng nhập |
+| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ, không ngắt người đang làm |
+| Trang lỗi, trang ngoài Smilelog | Mở lại sau 2 phút | Mở lại `APP_URL` sau 2 phút |
+| Tài khoản nên dùng | Tài khoản riêng, chỉ được xem | Tài khoản của từng người, đăng xuất khi rời máy |
+
+Đổi chế độ ngay trên máy, không cần cài lại:
+
+```bash
+sudo smilelog-tv mode full   # chạy toàn bộ phần mềm
+sudo smilelog-tv mode tv     # quay về Màn TV
+sudo smilelog-tv mode        # xem đang ở chế độ nào
+```
 
 ## Vì sao không cài thẳng lên TV Samsung
 
@@ -80,6 +99,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 ```bash
 sudo smilelog-tv status     # trang đang mở, lịch hẹn giờ, 20 dòng log gần nhất
 sudo smilelog-tv restart    # mở lại trình duyệt
+sudo smilelog-tv mode full  # đổi chế độ (tv | full), mở lại trình duyệt ngay
 sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)
@@ -92,3 +112,6 @@ sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xo
 - Đổi mật khẩu mặc định của tài khoản `pi` hoặc chỉ cho đăng nhập SSH bằng khoá.
 - Máy đang giữ phiên Smilelog: ai cầm được máy là xem được Màn TV. Đây là lý do nên dùng
   tài khoản chỉ được xem.
+- Chế độ `full` trên máy dùng chung: phiên đăng nhập được giữ qua cả lần khởi động lại, nên
+  người sau dùng tiếp tài khoản của người trước nếu không đăng xuất. Dặn mọi người đăng xuất khi
+  rời máy. Không dùng tài khoản Admin trên máy dùng chung.
