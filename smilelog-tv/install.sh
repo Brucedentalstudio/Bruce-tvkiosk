@@ -81,6 +81,11 @@ if [ "${ENABLE_TAILSCALE:-yes}" = yes ]; then
   fi
 fi
 
+if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then
+  echo "==> RustDesk (điều khiển màn hình từ xa)"
+  /usr/local/bin/smilelog-tv rustdesk install || echo "    Chưa cài được RustDesk: chạy lại install.sh khi có mạng"
+fi
+
 echo "==> USB, tải file, tải ảnh lên"
 # Cắm USB (FAT32/exFAT) là gắn vào /media/usb, mọi tài khoản đọc ghi được. Chromium hỏi chỗ lưu khi
 # tải file (Xuất Excel) và mở sẵn USB; khi chọn ảnh tải lên cũng chọn từ /media/usb.
@@ -101,6 +106,8 @@ if [ "${ENABLE_TRAINING:-no}" = yes ]; then
   # shellcheck source=/dev/null
   . /etc/os-release
   if [ "${ID:-}" = ubuntu ]; then DESKTOP_PKGS=(ubuntu-desktop-minimal); else DESKTOP_PKGS=(gnome-core gdm3); fi
+  # RustDesk điều khiển không cần người ngồi máy chỉ chạy được trên X11: cài Xorg cho giao diện Đào tạo.
+  [ "${ENABLE_RUSTDESK:-yes}" = yes ] && DESKTOP_PKGS+=(xserver-xorg)
   DEBIAN_FRONTEND=noninteractive apt-get install -y -q "${DESKTOP_PKGS[@]}" dconf-cli \
     libreoffice-impress libreoffice-calc libreoffice-writer libreoffice-gtk3 libreoffice-l10n-vi \
     fonts-crosextra-carlito fonts-crosextra-caladea fonts-noto-core
@@ -110,7 +117,9 @@ if [ "${ENABLE_TRAINING:-no}" = yes ]; then
   GDMCONF=/etc/gdm3/custom.conf
   [ -f "$GDMCONF" ] && [ ! -f "$GDMCONF.smilelog-tv.bak" ] && cp "$GDMCONF" "$GDMCONF.smilelog-tv.bak"
   install -d /etc/gdm3
-  printf '[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\n\n[security]\n\n[xdmcp]\n\n[chooser]\n\n[debug]\n' "$TU" >"$GDMCONF"
+  # Có RustDesk thì giao diện Đào tạo chạy X11 (WaylandEnable=false) để RustDesk xem và điều khiển được.
+  if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then WAYLAND=false; else WAYLAND=true; fi
+  printf '[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\nWaylandEnable=%s\n\n[security]\n\n[xdmcp]\n\n[chooser]\n\n[debug]\n' "$TU" "$WAYLAND" >"$GDMCONF"
   # Biểu tượng trên thanh bên trái: Microsoft 365, Google Drive, LibreOffice, File, hai nút quay về.
   APPS=/usr/local/share/applications
   install -d "$APPS"

@@ -34,8 +34,8 @@ if [ -f "$CMDLINE" ]; then sed -i -E 's/ ?video=HDMI-A-1:[^ ]*//g' "$CMDLINE"; f
 
 if [ "${1:-}" = --purge ]; then
   userdel --remove smilelog-tv 2>/dev/null || true
-  rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key
-  echo "Tailscale vẫn giữ để còn vào máy từ xa; gỡ hẳn: sudo apt-get purge tailscale"
+  rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key /etc/smilelog-tv.rustdesk-password
+  echo "Tailscale, RustDesk vẫn giữ để còn vào máy từ xa; gỡ hẳn: sudo apt-get purge tailscale rustdesk"
   userdel --remove daotao 2>/dev/null || true
   echo "Đã gỡ hẳn, kể cả cấu hình và phiên đăng nhập."
 else

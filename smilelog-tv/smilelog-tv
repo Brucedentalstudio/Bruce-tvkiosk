@@ -10,6 +10,7 @@
 #   smilelog-tv update       lấy bản mới nhất từ GitHub và cài lại (timer tự chạy mỗi đêm)
 #   smilelog-tv version      bản đang chạy
 #   smilelog-tv remote [up]  Tailscale: xem tên, IP để vào từ xa; "up" đăng nhập vào mạng của lab
+#   smilelog-tv rustdesk [install]  RustDesk: xem ID và mật khẩu để điều khiển từ xa; "install" cài/nâng cấp
 #   smilelog-tv restart      mở lại trình duyệt
 set -euo pipefail
 
@@ -314,10 +315,11 @@ cmd_update() {
       { log "Không tải được bản mới từ $repo"; exit 1; }
     if [ "$(git -C "$SRC" rev-parse HEAD)" = "$(git -C "$SRC" rev-parse FETCH_HEAD)" ] && [ "${1:-}" != --force ]; then
       echo "Đã là bản mới nhất: $(cmd_version)"
-      # Không có bản Smilelog TV mới vẫn nâng Tailscale nếu có bản mới.
+      # Không có bản Smilelog TV mới vẫn nâng Tailscale, RustDesk nếu có bản mới.
       if command -v tailscale >/dev/null; then
         DEBIAN_FRONTEND=noninteractive apt-get install -y -q --only-upgrade tailscale >/dev/null 2>&1 || true
       fi
+      if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then cmd_rustdesk install || true; fi
       return 0
     fi
     git -C "$SRC" reset --quiet --hard FETCH_HEAD
@@ -351,6 +353,59 @@ cmd_remote() {
     log "Tailscale: $(tailscale ip -4 2>/dev/null | head -1)"
   fi
   tailscale status --self --peers=false 2>/dev/null || echo "Chưa đăng nhập Tailscale: sudo smilelog-tv remote up"
+}
+
+RD_PASS=${SMILELOG_TV_RD_PASS:-/etc/smilelog-tv.rustdesk-password}
+
+# Bản RustDesk mới nhất: theo trang "latest" của GitHub, không được thì lấy tag số lớn nhất.
+rustdesk_latest() {
+  local v
+  v=$(curl -fsSI https://github.com/rustdesk/rustdesk/releases/latest 2>/dev/null |
+    sed -n 's#^location: .*/tag/\([0-9][0-9.]*\).*#\1#Ip' | tr -d '\r')
+  [ -n "$v" ] || v=$(git ls-remote --tags --refs https://github.com/rustdesk/rustdesk 2>/dev/null |
+    awk -F/ '{print $3}' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+  echo "$v"
+}
+
+cmd_rustdesk() {
+  case "${1:-info}" in
+    install)
+      local want have arch tmp
+      want=${RUSTDESK_VERSION:-$(rustdesk_latest)}
+      [ -n "$want" ] || { log "Không tìm được bản RustDesk mới nhất (mạng?)"; return 1; }
+      have=$(dpkg-query -W -f='${Version}' rustdesk 2>/dev/null || true)
+      if [ -z "$have" ] || dpkg --compare-versions "$have" lt "$want"; then
+        case "$(uname -m)" in
+          x86_64) arch=x86_64 ;;
+          aarch64) arch=aarch64 ;;
+          *) log "RustDesk không có bản cho máy $(uname -m)"; return 1 ;;
+        esac
+        tmp=$(mktemp -d)
+        curl -fsSL -o "$tmp/rustdesk.deb" \
+          "https://github.com/rustdesk/rustdesk/releases/download/$want/rustdesk-$want-$arch.deb" ||
+          { rm -rf "$tmp"; log "Không tải được RustDesk $want"; return 1; }
+        chmod 644 "$tmp/rustdesk.deb"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/rustdesk.deb"
+        rm -rf "$tmp"
+        log "Đã cài RustDesk $want${have:+ (trước: $have)}"
+      fi
+      systemctl enable --now rustdesk.service 2>/dev/null || true
+      # Mật khẩu cố định để vào máy không cần ai bấm chấp nhận. Chỉ root đọc được file này.
+      [ -s "$RD_PASS" ] || (umask 077 && head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 12 >"$RD_PASS")
+      sleep 2
+      rustdesk --password "$(cat "$RD_PASS")" >/dev/null 2>&1 || log "Chưa đặt được mật khẩu RustDesk: chạy lại sudo smilelog-tv rustdesk install"
+      ;;
+    info)
+      command -v rustdesk >/dev/null || { echo "Chưa cài RustDesk: sudo smilelog-tv rustdesk install" >&2; exit 1; }
+      echo "RustDesk ID: $(rustdesk --get-id 2>/dev/null || echo 'chưa có (đợi vài giây sau khi cài)')"
+      if [ -r "$RD_PASS" ]; then echo "Mật khẩu:    $(cat "$RD_PASS")"; else echo "Mật khẩu: chạy bằng sudo để xem"; fi
+      case "$MODE" in
+        training) echo "Chế độ Đào tạo: xem và điều khiển được màn hình." ;;
+        *) echo "Chế độ $MODE (kiosk Wayland): RustDesk chưa xem được màn hình. Đổi sang Đào tạo: sudo smilelog-tv mode training" ;;
+      esac
+      ;;
+    *) echo "Dùng: smilelog-tv rustdesk [install]" >&2; exit 2 ;;
+  esac
 }
 
 # Một dòng kết quả: OK / CHÚ Ý / LỖI + nội dung.
@@ -420,6 +475,15 @@ cmd_doctor() {
   else
     report CHÚ_Ý "Tailscale chưa đăng nhập: sudo smilelog-tv remote up"
   fi
+  if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then
+    if ! command -v rustdesk >/dev/null; then
+      report LỖI "Chưa cài RustDesk: sudo smilelog-tv rustdesk install"
+    elif ! systemctl is-active --quiet rustdesk.service; then
+      report LỖI "Dịch vụ RustDesk không chạy"
+    else
+      report OK "RustDesk $(dpkg-query -W -f='${Version}' rustdesk 2>/dev/null), ID $(rustdesk --get-id 2>/dev/null) (mật khẩu: sudo smilelog-tv rustdesk)"
+    fi
+  fi
   curl -fsS --max-time 8 -o /dev/null "${TV_URL:-https://smilelog.vn/}" 2>/dev/null && report OK "Ra được Smilelog" ||
     report LỖI "Không vào được ${TV_URL:-Smilelog}: kiểm tra mạng"
 }
@@ -468,6 +532,7 @@ case "${1:-}" in
   update)   shift; cmd_update "$@" ;;
   version)  cmd_version ;;
   remote)   shift; cmd_remote "$@" ;;
+  rustdesk) shift; cmd_rustdesk "$@" ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

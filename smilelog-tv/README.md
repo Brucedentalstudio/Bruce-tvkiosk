@@ -62,7 +62,7 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 | **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
 | **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
 | **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
-| **Xem màn hình chế độ Đào tạo từ xa** | Ubuntu có sẵn Remote Desktop (Cài đặt → Hệ thống → Remote Desktop), kết nối qua Tailscale |
+| **RustDesk** (xem, điều khiển màn hình) | `install.sh` tự cài bản mới nhất, đặt mật khẩu cố định và nâng cấp mỗi đêm. Xem ID và mật khẩu trên máy: `sudo smilelog-tv rustdesk`. Trên laptop hoặc điện thoại mở RustDesk, nhập ID và mật khẩu đó. **Chỉ điều khiển được ở chế độ Đào tạo** (chạy X11). Màn TV, Ca & Kho việc là kiosk Wayland, RustDesk chưa thấy màn hình: dùng dòng dưới, hoặc qua SSH đổi tạm `sudo smilelog-tv mode training` |
 
 **Khoá đăng nhập Tailscale** (cho nhiều máy, không phải mở link từng máy): Tailscale admin → Settings
 → Keys → **Generate auth key**, chọn *Reusable*, gắn tag (ví dụ `tag:kiosk`) để khoá không hết hạn theo
