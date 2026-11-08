@@ -77,16 +77,18 @@ máy cần một khoá chỉ đọc (GitHub → Settings → Deploy keys) và `U
 
 ## Wayland hay X11 cho kiosk
 
-`DISPLAY_SERVER` trong `/etc/smilelog-tv.conf`, đổi xong chạy lại `sudo ./install.sh`:
+Khi chạy `sudo ./install.sh` từ bàn phím, máy in bảng so sánh dưới đây và hỏi KTV chọn (Enter = giữ
+lựa chọn hiện tại). Chọn sẵn không hỏi: `sudo ./install.sh --display x11` hoặc `--display wayland`.
+Lần cập nhật tự động ban đêm không hỏi, giữ lựa chọn đã lưu trong `DISPLAY_SERVER`.
 
-| | `wayland` (mặc định hiện tại, cage) | `x11` (Xorg) |
+| | `x11` (**mặc định**, khuyên dùng) | `wayland` (cage) |
 |---|---|---|
-| RustDesk xem, điều khiển kiosk | Không | **Có**, kể cả khi trình duyệt treo, màn đen |
-| Khoá chặt | Chặt nhất: cage chỉ chạy một ứng dụng | Đủ cho kiosk: chỉ Chromium toàn màn hình, không thanh tác vụ |
-| Hình ảnh | Không xé hình | Có thể xé hình khi cuộn nhanh |
+| RustDesk xem, điều khiển kiosk | **Có**, kể cả khi trình duyệt treo, màn đen | Không: chỉ còn SSH qua Tailscale |
+| Khoá chặt | Đủ cho kiosk: chỉ Chromium toàn màn hình, không thanh tác vụ | Chặt nhất: chỉ chạy đúng một ứng dụng |
+| Hình ảnh | Có thể hơi xé hình khi cuộn nhanh | Mượt, không xé hình |
+| Chọn khi | Muốn hỗ trợ từ xa mà không phải tới máy (đa số trường hợp) | Máy không cần điều khiển từ xa, hoặc X11 lỗi hiển thị trên máy đó |
 
-Đề xuất: bật `x11` trên **một máy** trước, chạy vài ngày ổn rồi mới đổi các máy khác. Có lỗi thì đặt
-lại `wayland` và chạy `install.sh` là về như cũ.
+Có lỗi hiển thị sau khi đổi: chạy lại `sudo ./install.sh --display wayland` là về như cũ.
 
 ## Vì sao không cài thẳng lên TV Samsung
 

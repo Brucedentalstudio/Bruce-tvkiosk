@@ -27,7 +27,7 @@ EXTENSION=${SMILELOG_TV_EXTENSION:-/usr/local/share/smilelog-tv/extension}
 # Cấu hình cũ chưa có MODE thì giữ cách chạy cũ: Màn TV.
 MODE=${MODE:-tv}
 # wayland: kiosk chạy trong cage. x11: kiosk chạy trên Xorg, để RustDesk xem và điều khiển được.
-DISPLAY_SERVER=${DISPLAY_SERVER:-wayland}
+DISPLAY_SERVER=${DISPLAY_SERVER:-x11}
 
 log() { logger -t smilelog-tv -- "$*" 2>/dev/null || true; echo "$*" >&2; }
 

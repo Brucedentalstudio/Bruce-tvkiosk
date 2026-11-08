@@ -1,13 +1,24 @@
 #!/bin/bash
 # Cài máy chiếu Màn TV Smilelog lên Raspberry Pi OS / Debian / Ubuntu.
 # Chạy lại được nhiều lần: sửa /etc/smilelog-tv.conf rồi chạy lại để áp dụng.
-#   sudo ./install.sh
+#   sudo ./install.sh                   hỏi chọn X11 / Wayland (Enter = giữ lựa chọn hiện tại)
+#   sudo ./install.sh --display x11     chọn sẵn, không hỏi (x11 hoặc wayland)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 CONF=/etc/smilelog-tv.conf
 UNITS=/etc/systemd/system
 KIOSK_USER=smilelog-tv
+
+ARG_DISPLAY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --display) ARG_DISPLAY=${2:-}; shift 2 ;;
+    --display=*) ARG_DISPLAY=${1#*=}; shift ;;
+    *) echo "Không hiểu tham số: $1 (dùng: --display x11|wayland)" >&2; exit 2 ;;
+  esac
+done
+case "$ARG_DISPLAY" in "" | x11 | wayland) ;; *) echo "--display chỉ nhận x11 hoặc wayland" >&2; exit 2 ;; esac
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo" >&2; exit 1; }
 command -v apt-get >/dev/null || { echo "Chỉ hỗ trợ hệ Debian (Raspberry Pi OS, Debian, Ubuntu)" >&2; exit 1; }
@@ -57,7 +68,44 @@ for g in video render input; do
   getent group "$g" >/dev/null && usermod -aG "$g" "$KIOSK_USER"
 done
 
-if [ "${DISPLAY_SERVER:-wayland}" = x11 ]; then
+echo "==> Cách vẽ màn hình kiosk: X11 hay Wayland"
+CUR_DISPLAY=${DISPLAY_SERVER:-x11}
+if [ -n "$ARG_DISPLAY" ]; then
+  DISPLAY_SERVER=$ARG_DISPLAY
+elif [ -t 0 ] && [ -t 1 ]; then
+  cat <<EOF
+    Chọn cách kiosk (Màn TV, Ca & Kho việc) vẽ màn hình. Chế độ Đào tạo không bị ảnh hưởng.
+
+    [1] X11 (khuyên dùng, mặc định)
+        + RustDesk xem và điều khiển được màn hình TV từ xa, kể cả khi trình duyệt treo, màn đen,
+          nên đa số sự cố xử lý được mà không phải tới tận máy.
+        - Có thể hơi xé hình khi cuộn nhanh (Màn TV chủ yếu đổi trang nên ít thấy).
+    [2] Wayland
+        + Khoá chặt nhất (chỉ chạy đúng một ứng dụng), hình mượt, không xé hình.
+        - RustDesk KHÔNG thấy màn hình kiosk; hỗ trợ từ xa chỉ còn SSH qua Tailscale.
+        Chọn khi: máy không cần điều khiển màn hình từ xa, hoặc X11 bị lỗi hiển thị trên máy này.
+
+    Đang dùng: $CUR_DISPLAY. Đổi sau được: chạy lại install.sh và chọn lại.
+EOF
+  read -r -p "    Chọn 1 hoặc 2 (Enter = giữ $CUR_DISPLAY): " ans || ans=""
+  case "$ans" in
+    1) DISPLAY_SERVER=x11 ;;
+    2) DISPLAY_SERVER=wayland ;;
+    "") DISPLAY_SERVER=$CUR_DISPLAY ;;
+    *) echo "    Không hiểu \"$ans\": giữ $CUR_DISPLAY"; DISPLAY_SERVER=$CUR_DISPLAY ;;
+  esac
+else
+  # Chạy tự động (cập nhật ban đêm): không hỏi, giữ lựa chọn đã lưu.
+  DISPLAY_SERVER=$CUR_DISPLAY
+fi
+if grep -q '^DISPLAY_SERVER=' "$CONF"; then
+  sed -i "s/^DISPLAY_SERVER=.*/DISPLAY_SERVER=\"$DISPLAY_SERVER\"/" "$CONF"
+else
+  printf '\nDISPLAY_SERVER="%s"\n' "$DISPLAY_SERVER" >>"$CONF"
+fi
+echo "    Kiosk chạy: $DISPLAY_SERVER"
+
+if [ "$DISPLAY_SERVER" = x11 ]; then
   echo "==> Kiosk chạy X11"
   # Xorg tối giản: không màn đăng nhập, không thanh tác vụ; chỉ Chromium toàn màn hình.
   DEBIAN_FRONTEND=noninteractive apt-get install -y -q xserver-xorg xinit x11-xserver-utils unclutter matchbox-window-manager
@@ -160,7 +208,7 @@ EOF
 fi
 
 echo "==> Dịch vụ systemd"
-if [ "${DISPLAY_SERVER:-wayland}" = x11 ]; then
+if [ "$DISPLAY_SERVER" = x11 ]; then
   KIOSK_SESSION_TYPE=x11
   # Xorg chạy bằng tài khoản kiosk trên tty1 (phiên logind), không cần quyền root.
   KIOSK_EXEC="/usr/bin/xinit /usr/local/bin/smilelog-tv x11-session -- /usr/bin/Xorg :0 vt1 -keeptty -nolisten tcp -s 0 -dpms"
