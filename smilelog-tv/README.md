@@ -3,28 +3,77 @@
 Biến một máy tính nhỏ cắm vào cổng HDMI của TV thành màn hình kiosk chạy Smilelog. Bật điện là
 tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục.
 
-## Hai chế độ
+## Ba chế độ
 
-| | `tv` (mặc định) | `full` |
-|---|---|---|
-| Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối: có bàn phím, chuột |
-| Màn được mở | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con như chi tiết ca |
-| Mở lúc bật máy | `TV_URL` | `APP_URL` (mặc định Kho việc) |
-| Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` |
-| Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường, người dùng tự đăng nhập |
-| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ, không ngắt người đang làm |
-| Tài khoản nên dùng | Tài khoản riêng, chỉ được xem | Tài khoản của từng người, đăng xuất khi rời máy |
+| | `tv` (mặc định) | `full` | `training` (Đào tạo) |
+|---|---|---|---|
+| Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản |
+| Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
+| Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do |
+| Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường | Không áp dụng |
+| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
+| Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị |
+
+**Chế độ Đào tạo** phải bật riêng, vì tải thêm khoảng 1-2 GB (giao diện GNOME, LibreOffice, phông chữ):
+đặt `ENABLE_TRAINING="yes"` trong `/etc/smilelog-tv.conf` rồi chạy `sudo ./install.sh`. Thanh bên trái
+có sẵn: **Microsoft 365** (PowerPoint, Excel trên web), **Google Drive**, LibreOffice Impress và
+Calc, File, **Quay về Ca & Kho việc**, **Quay về Màn TV**.
+
+- File `.pptx`, `.xlsx` đơn giản mở bằng LibreOffice là được. File nhiều hiệu ứng, SmartArt, macro
+  thì mở bằng Microsoft 365 trên web, hoặc dùng laptop cắm cổng HDMI thứ 2 của TV.
+- Bút trình chiếu không dây (clicker) dùng được ngay: nó gửi phím chuyển trang như bàn phím.
+- Rời chế độ Đào tạo là đóng toàn bộ phiên đang mở: **lưu file trước khi chuyển**.
 
 Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
 ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
-Đổi chế độ ngay trên máy, không cần cài lại:
+## Đổi chế độ ngay trên TV
 
-```bash
-sudo smilelog-tv mode full   # Danh sách ca + Kho việc
-sudo smilelog-tv mode tv     # quay về Màn TV
-sudo smilelog-tv mode        # xem đang ở chế độ nào
-```
+| Cách | Thao tác |
+|---|---|
+| **Nút nổi** ⇄ góc dưới bên trái | Bấm ⇄ để mở bảng, bấm **"Chuyển sang …"** (một nút cho mỗi chế độ khác) để xác nhận. Bảng có thêm **"Mở lại trình duyệt"**, tự đóng sau 8 giây |
+| **Phím tắt** (cắm bàn phím USB hoặc không dây) | **Ctrl+Alt+M** đổi vòng Màn TV → Ca & Kho việc → Đào tạo → Màn TV; **Ctrl+Alt+R** mở lại trình duyệt. Dùng được cả trong chế độ Đào tạo |
+| **Biểu tượng** trong chế độ Đào tạo | **Quay về Ca & Kho việc**, **Quay về Màn TV** trên thanh bên trái |
+| **SSH** | `sudo smilelog-tv mode tv`, `mode full`, `mode training`, `mode toggle`, hoặc `mode` để xem chế độ hiện tại |
+
+- Màn hình tải lại trong vài giây sau khi đổi. Bấm lặp trong 5 giây đó bị bỏ qua, nên không đổi
+  nhầm hai lần.
+- Nút nổi chỉ hiện trên trang Smilelog, mờ đi khi không dùng. Không hiện trên màn chờ ngoài giờ;
+  lúc đó dùng phím tắt.
+- Ẩn nút nổi trên TV chỉ để xem: đặt `SHOW_SWITCH_BUTTON="no"` rồi chạy lại `sudo ./install.sh`.
+  Phím tắt vẫn dùng được.
+- Nút và phím tắt gọi dịch vụ `smilelog-tv-control` chỉ nghe trong máy (`127.0.0.1:9333`) và cần
+  mã khoá trong `/etc/smilelog-tv.token`, nên trang web khác mở trên máy không đổi được chế độ.
+
+## In phiếu, tải file, tải ảnh lên, tab mới
+
+| Việc | Cách chạy trên máy kiosk |
+|---|---|
+| **In phiếu, QR** | Máy in mạng đời mới thường tự hiện (CUPS tự tìm). Không thấy thì thêm tay: `sudo smilelog-tv printer add phieu 192.168.1.50`, rồi `sudo smilelog-tv printer test`. Bấm In trong Smilelog sẽ hiện hộp chọn máy in. Muốn bấm In là in luôn: `KIOSK_PRINTING="yes"` |
+| **Xuất Excel, tải file** | Cắm USB (FAT32 hoặc exFAT): Chromium hỏi chỗ lưu và mở sẵn USB (`/media/usb`). Rút USB ra mang đi |
+| **Tải ảnh lên** (ảnh lỗi khi báo làm lại…) | Chép ảnh vào USB, cắm vào máy, chọn ảnh từ `/media/usb`. Chụp bằng điện thoại thì dùng app IPS InLab nhanh hơn |
+| **Link mở tab mới** ("Xem 3D") | Tab mới có nút **"✕ Đóng tab này"** góc trên bên phải, bấm để quay về Smilelog. Ở chế độ `full`, máy không tự mở lại khi còn tab Smilelog phía sau |
+
+## Điều khiển và cập nhật từ xa
+
+| Việc | Cách |
+|---|---|
+| **Cập nhật** | Mỗi đêm lúc `AUTO_UPDATE_AT` (mặc định 02:30) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
+| **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
+| **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
+| **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
+| **RustDesk** (xem, điều khiển màn hình) | `install.sh` tự cài bản mới nhất, đặt mật khẩu cố định và nâng cấp mỗi đêm. Xem ID và mật khẩu trên máy: `sudo smilelog-tv rustdesk`. Trên laptop hoặc điện thoại mở RustDesk, nhập ID và mật khẩu đó. **Chỉ điều khiển được ở chế độ Đào tạo** (chạy X11). Màn TV, Ca & Kho việc là kiosk Wayland, RustDesk chưa thấy màn hình: dùng dòng dưới, hoặc qua SSH đổi tạm `sudo smilelog-tv mode training` |
+
+**Khoá đăng nhập Tailscale** (cho nhiều máy, không phải mở link từng máy): Tailscale admin → Settings
+→ Keys → **Generate auth key**, chọn *Reusable*, gắn tag (ví dụ `tag:kiosk`) để khoá không hết hạn theo
+người tạo. Lưu trên từng máy:
+`sudo install -m 600 /dev/stdin /etc/smilelog-tv.tailscale-key` (dán khoá, Enter, Ctrl+D). Không ghi
+khoá vào `/etc/smilelog-tv.conf`, không gửi khoá qua chat. Trong Tailscale admin → Access controls,
+cho phép tài khoản quản lý SSH vào máy có tag này.
+
+Repo đang **public** nên máy tự cập nhật được không cần khoá. Nếu chuyển repo sang **private**, mỗi
+máy cần một khoá chỉ đọc (GitHub → Settings → Deploy keys) và `UPDATE_REPO` dạng
+`git@github.com:Brucedentalstudio/Bruce-tvkiosk.git`.
 
 ## Vì sao không cài thẳng lên TV Samsung
 
@@ -102,7 +151,11 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 ```bash
 sudo smilelog-tv status     # trang đang mở, lịch hẹn giờ, 20 dòng log gần nhất
 sudo smilelog-tv restart    # mở lại trình duyệt
-sudo smilelog-tv mode full  # đổi chế độ (tv | full), mở lại trình duyệt ngay
+sudo smilelog-tv mode full  # đổi chế độ (tv | full | training | toggle)
+sudo smilelog-tv doctor     # kiểm tra máy, gửi kết quả cho người hỗ trợ
+sudo smilelog-tv update     # cập nhật ngay từ GitHub
+sudo smilelog-tv printer list  # máy in (add TÊN IP | default TÊN | test)
+sudo journalctl -u smilelog-tv-control -n 20  # nhật ký phím tắt và nút nổi
 sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)

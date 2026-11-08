@@ -15,17 +15,35 @@ command -v apt-get >/dev/null || { echo "Chỉ hỗ trợ hệ Debian (Raspberry
 echo "==> Cài gói"
 apt-get update -q
 if apt-cache show chromium >/dev/null 2>&1; then BROWSER_PKG=chromium; else BROWSER_PKG=chromium-browser; fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q cage "$BROWSER_PKG" jq curl v4l-utils
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q cage "$BROWSER_PKG" jq curl v4l-utils python3 git
+# python3-evdev bắt phím tắt Ctrl+Alt+M / Ctrl+Alt+R; thiếu gói này thì chỉ còn nút nổi trên màn hình.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-evdev ||
+  echo "    Không cài được python3-evdev: phím tắt sẽ không chạy, nút nổi vẫn dùng được"
+# In phiếu, QR: CUPS + tự tìm máy in mạng (IPP Everywhere, không cần driver riêng).
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q cups cups-browsed avahi-daemon ||
+  echo "    Không cài được CUPS: chưa in được"
 # wlr-randr đổi độ phân giải ngay trong phiên kiosk; bản phân phối cũ có thể không có gói này.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q wlr-randr ||
   echo "    Không cài được wlr-randr: độ phân giải chỉ đặt qua cmdline.txt"
 
 echo "==> Cấu hình"
 [ -f "$CONF" ] || install -m 644 "$HERE/smilelog-tv.conf.example" "$CONF"
+# Máy cài từ bản cũ: thêm các tuỳ chọn mới (giá trị mặc định) mà không đụng giá trị đã sửa.
+added=""
+while IFS= read -r line; do
+  key=${line%%=*}
+  grep -q "^$key=" "$CONF" || added+="$line"$'\n'
+done < <(grep -E '^[A-Z_]+=' "$HERE/smilelog-tv.conf.example")
+if [ -n "$added" ]; then
+  printf '\n# Tuỳ chọn mới thêm khi cập nhật (giải thích trong smilelog-tv.conf.example)\n%s' "$added" >>"$CONF"
+  echo "    Đã thêm tuỳ chọn mới vào $CONF: $(echo "$added" | cut -d= -f1 | tr '\n' ' ')"
+fi
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
 install -m 755 "$HERE/smilelog-tv" /usr/local/bin/smilelog-tv
 install -D -m 644 "$HERE/screensaver.html" /usr/local/share/smilelog-tv/screensaver.html
+install -m 755 "$HERE/smilelog-tv-control" /usr/local/bin/smilelog-tv-control
+install -m 755 "$HERE/smilelog-tv-desktop" /usr/local/bin/smilelog-tv-desktop
 
 if [ -n "${TIMEZONE:-}" ]; then
   timedatectl set-timezone "$TIMEZONE"
@@ -38,6 +56,102 @@ id "$KIOSK_USER" >/dev/null 2>&1 ||
 for g in video render input; do
   getent group "$g" >/dev/null && usermod -aG "$g" "$KIOSK_USER"
 done
+
+echo "==> Phím tắt và nút đổi chế độ"
+# Token chỉ root và tiện ích trong trình duyệt đọc được; trang web lạ không gọi được lệnh đổi chế độ.
+[ -s /etc/smilelog-tv.token ] || (umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' >/etc/smilelog-tv.token)
+EXT=/usr/local/share/smilelog-tv/extension
+install -d -m 750 -g "$KIOSK_USER" "$EXT"
+install -m 640 -g "$KIOSK_USER" "$HERE/extension/background.js" "$HERE/extension/content.js" "$HERE/extension/tabs.js" "$EXT/"
+jq -n --arg t "$(cat /etc/smilelog-tv.token)" '{token: $t}' | install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/token.json"
+# Nút chỉ hiện trên các trang Smilelog: tên miền của TV_URL, APP_URL và APP_HOSTS (cả tên miền con).
+hosts=$(printf '%s\n' "${TV_URL:-}" "${APP_URL:-}" | sed -nE 's#^https?://([^/:]+).*#\1#p'; tr ' ' '\n' <<<"${APP_HOSTS:-}")
+matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https://" + .), ("https://*." + .) | . + "/*"' | jq -s .)
+jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
+  install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
+
+if [ "${ENABLE_TAILSCALE:-yes}" = yes ]; then
+  echo "==> Tailscale (vào máy từ xa)"
+  # Cài từ kho chính thức của Tailscale; lần sau apt và tính năng tự cập nhật của Tailscale giữ bản mới.
+  command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh ||
+    echo "    Không cài được Tailscale: kiểm tra mạng rồi chạy lại install.sh"
+  if command -v tailscale >/dev/null; then
+    systemctl enable --now tailscaled
+    /usr/local/bin/smilelog-tv remote up || true
+  fi
+fi
+
+if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then
+  echo "==> RustDesk (điều khiển màn hình từ xa)"
+  /usr/local/bin/smilelog-tv rustdesk install || echo "    Chưa cài được RustDesk: chạy lại install.sh khi có mạng"
+fi
+
+echo "==> USB, tải file, tải ảnh lên"
+# Cắm USB (FAT32/exFAT) là gắn vào /media/usb, mọi tài khoản đọc ghi được. Chromium hỏi chỗ lưu khi
+# tải file (Xuất Excel) và mở sẵn USB; khi chọn ảnh tải lên cũng chọn từ /media/usb.
+install -d /media/usb
+cat >/etc/udev/rules.d/99-smilelog-tv-usb.rules <<EOF
+ACTION=="add", SUBSYSTEMS=="usb", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_FS_TYPE}=="vfat|exfat", RUN{program}+="/usr/bin/systemd-mount --no-block --collect -o uid=$(id -u "$KIOSK_USER"),gid=$(id -g "$KIOSK_USER"),umask=000 \$devnode /media/usb"
+ACTION=="remove", SUBSYSTEMS=="usb", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", RUN{program}+="/usr/bin/systemd-mount --umount \$devnode"
+EOF
+udevadm control --reload || true
+for d in /etc/chromium/policies/managed /etc/chromium-browser/policies/managed; do
+  install -d "$d"
+  jq -n '{PromptForDownloadLocation: true, DownloadDirectory: "/media/usb"}' >"$d/smilelog-tv.json"
+done
+
+if [ "${ENABLE_TRAINING:-no}" = yes ]; then
+  echo "==> Chế độ Đào tạo (giao diện Ubuntu, LibreOffice)"
+  TU=${TRAINING_USER:-daotao}
+  # shellcheck source=/dev/null
+  . /etc/os-release
+  if [ "${ID:-}" = ubuntu ]; then DESKTOP_PKGS=(ubuntu-desktop-minimal); else DESKTOP_PKGS=(gnome-core gdm3); fi
+  # RustDesk điều khiển không cần người ngồi máy chỉ chạy được trên X11: cài Xorg cho giao diện Đào tạo.
+  [ "${ENABLE_RUSTDESK:-yes}" = yes ] && DESKTOP_PKGS+=(xserver-xorg)
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q "${DESKTOP_PKGS[@]}" dconf-cli \
+    libreoffice-impress libreoffice-calc libreoffice-writer libreoffice-gtk3 libreoffice-l10n-vi \
+    fonts-crosextra-carlito fonts-crosextra-caladea fonts-noto-core
+  # Tài khoản riêng, không mật khẩu, không quyền quản trị; GDM tự đăng nhập vào đây.
+  id "$TU" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --comment "Dao tao" "$TU"
+  passwd -d "$TU" >/dev/null
+  GDMCONF=/etc/gdm3/custom.conf
+  [ -f "$GDMCONF" ] && [ ! -f "$GDMCONF.smilelog-tv.bak" ] && cp "$GDMCONF" "$GDMCONF.smilelog-tv.bak"
+  install -d /etc/gdm3
+  # Có RustDesk thì giao diện Đào tạo chạy X11 (WaylandEnable=false) để RustDesk xem và điều khiển được.
+  if [ "${ENABLE_RUSTDESK:-yes}" = yes ]; then WAYLAND=false; else WAYLAND=true; fi
+  printf '[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\nWaylandEnable=%s\n\n[security]\n\n[xdmcp]\n\n[chooser]\n\n[debug]\n' "$TU" "$WAYLAND" >"$GDMCONF"
+  # Biểu tượng trên thanh bên trái: Microsoft 365, Google Drive, LibreOffice, File, hai nút quay về.
+  APPS=/usr/local/share/applications
+  install -d "$APPS"
+  launcher() { # tên file, tiêu đề, lệnh, biểu tượng
+    printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\n' "$2" "$3" "$4" >"$APPS/$1.desktop"
+  }
+  launcher smilelog-tv-ms365 "Microsoft 365 (PowerPoint, Excel)" "smilelog-tv-desktop open https://www.office.com" web-browser
+  launcher smilelog-tv-gdrive "Google Drive" "smilelog-tv-desktop open https://drive.google.com" web-browser
+  launcher smilelog-tv-back-tv "Quay về Màn TV" "smilelog-tv-desktop switch tv" video-display
+  launcher smilelog-tv-back-full "Quay về Ca & Kho việc" "smilelog-tv-desktop switch full" view-list
+  # Thiết lập chung: thanh biểu tượng, không khoá màn hình, không tự ngủ khi đang trình chiếu.
+  install -d /etc/dconf/profile /etc/dconf/db/local.d
+  if [ ! -f /etc/dconf/profile/user ]; then
+    printf 'user-db:user\nsystem-db:local\n' >/etc/dconf/profile/user
+  elif ! grep -q '^system-db:local' /etc/dconf/profile/user; then
+    echo 'system-db:local' >>/etc/dconf/profile/user
+  fi
+  cat >/etc/dconf/db/local.d/00-smilelog-tv <<'EOF'
+[org/gnome/shell]
+favorite-apps=['smilelog-tv-ms365.desktop', 'smilelog-tv-gdrive.desktop', 'libreoffice-impress.desktop', 'libreoffice-calc.desktop', 'org.gnome.Nautilus.desktop', 'smilelog-tv-back-full.desktop', 'smilelog-tv-back-tv.desktop']
+
+[org/gnome/desktop/screensaver]
+lock-enabled=false
+
+[org/gnome/desktop/session]
+idle-delay=uint32 0
+
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+EOF
+  dconf update
+fi
 
 echo "==> Dịch vụ systemd"
 cat >"$UNITS/smilelog-tv.service" <<EOF
@@ -69,6 +183,19 @@ RestartSec=5
 WantedBy=graphical.target
 EOF
 
+cat >"$UNITS/smilelog-tv-control.service" <<EOF
+[Unit]
+Description=Smilelog Màn TV: phím tắt và nút đổi chế độ
+
+[Service]
+ExecStart=/usr/local/bin/smilelog-tv-control
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 cat >"$UNITS/smilelog-tv-watchdog.service" <<EOF
 [Unit]
 Description=Smilelog Màn TV: giám sát
@@ -93,8 +220,8 @@ EOF
 # Timer theo giờ trong file cấu hình. Giá trị trống thì gỡ timer tương ứng.
 schedule() { # tên, giờ HH:MM, lệnh, mô tả
   local name=$1 at=$2 cmd=$3 desc=$4 cal="*-*-* $2:00"
-  # Khởi động lại chạy mọi đêm; bật/tắt TV chỉ chạy vào SCREEN_DAYS.
-  if [ "$name" != reboot ] && [ -n "${SCREEN_DAYS:-}" ]; then cal="$SCREEN_DAYS $cal"; fi
+  # Khởi động lại, cập nhật chạy mọi đêm; bật/tắt TV chỉ chạy vào SCREEN_DAYS.
+  if [ "$name" != reboot ] && [ "$name" != update ] && [ -n "${SCREEN_DAYS:-}" ]; then cal="$SCREEN_DAYS $cal"; fi
   if [ -z "$at" ]; then
     systemctl disable --now "smilelog-tv-$name.timer" 2>/dev/null || true
     rm -f "$UNITS/smilelog-tv-$name.service" "$UNITS/smilelog-tv-$name.timer"
@@ -125,7 +252,8 @@ EOF
 systemctl daemon-reload
 systemctl disable getty@tty1.service 2>/dev/null || true
 systemctl set-default graphical.target
-systemctl enable smilelog-tv.service smilelog-tv-watchdog.timer
+systemctl enable smilelog-tv.service smilelog-tv-watchdog.timer smilelog-tv-control.service
+systemctl restart smilelog-tv-control.service
 systemctl start smilelog-tv-watchdog.timer
 
 if [ -e /dev/cec0 ]; then
@@ -137,6 +265,7 @@ else
   schedule screen-off "" "" ""
 fi
 schedule reboot "${REBOOT_AT:-}" "/bin/systemctl reboot" "khởi động lại"
+schedule update "${AUTO_UPDATE_AT-02:30}" "/usr/local/bin/smilelog-tv update" "cập nhật từ GitHub"
 
 echo "==> Độ phân giải"
 # Trên Raspberry Pi, tham số video= trong cmdline.txt đặt chế độ hình cho cổng HDMI0 từ lúc khởi động.
@@ -156,7 +285,9 @@ else
   echo "    Không phải Raspberry Pi: chỉ đặt độ phân giải trong phiên kiosk (wlr-randr)"
 fi
 
-systemctl restart smilelog-tv.service
+# Bật kiosk hoặc giao diện Đào tạo theo MODE; tắt màn đăng nhập Ubuntu khi chạy kiosk để hai bên
+# không giành màn hình.
+/usr/local/bin/smilelog-tv apply
 
 cat <<EOF
 

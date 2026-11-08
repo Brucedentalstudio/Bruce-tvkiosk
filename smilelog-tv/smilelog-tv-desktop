@@ -1,0 +1,19 @@
+#!/bin/bash
+# smilelog-tv-desktop: biểu tượng trên giao diện Đào tạo gọi lệnh này.
+#   smilelog-tv-desktop open URL      mở URL bằng Chromium (Microsoft 365, Google Drive)
+#   smilelog-tv-desktop switch MODE   quay về tv (Màn TV) hoặc full (Danh sách ca + Kho việc)
+set -euo pipefail
+SOCKET=${SMILELOG_TV_SOCKET:-/run/smilelog-tv/control.sock}
+
+case "${1:-}" in
+  open)
+    browser=$(command -v chromium || command -v chromium-browser) || { echo "Chưa cài Chromium" >&2; exit 1; }
+    exec "$browser" "${2:?Thiếu URL}"
+    ;;
+  switch)
+    case "${2:-}" in tv | full) ;; *) echo "Dùng: smilelog-tv-desktop switch tv|full" >&2; exit 2 ;; esac
+    # Dịch vụ điều khiển chạy bằng root sẽ tắt giao diện Đào tạo và mở lại kiosk.
+    curl -fsS --unix-socket "$SOCKET" -X POST "http://localhost/mode/$2" >/dev/null
+    ;;
+  *) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

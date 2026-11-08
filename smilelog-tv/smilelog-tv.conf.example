@@ -8,6 +8,23 @@
 #          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
 MODE="tv"
 
+# Đổi chế độ ngay trên TV, không cần SSH:
+#   - Phím tắt (cắm bàn phím USB hoặc bàn phím không dây): Ctrl+Alt+M đổi chế độ,
+#     Ctrl+Alt+R mở lại trình duyệt.
+#   - Nút nổi ⇄ ở góc dưới bên trái: bấm để mở bảng, bấm "Chuyển sang ..." để xác nhận.
+# Đặt "no" để ẩn nút nổi (phím tắt vẫn dùng được). Đổi xong chạy lại: sudo ./install.sh
+SHOW_SWITCH_BUTTON="yes"
+
+# Chế độ Đào tạo: giao diện Ubuntu (GNOME) với LibreOffice, Microsoft 365, Google Drive, mở file từ USB.
+# "yes" rồi chạy lại sudo ./install.sh (tải khoảng 1-2 GB lần đầu). Khi bật, nút ⇄ và Ctrl+Alt+M
+# đổi vòng: Màn TV -> Ca & Kho việc -> Đào tạo. Tài khoản Đào tạo không mật khẩu, không quyền quản trị.
+ENABLE_TRAINING="no"
+TRAINING_USER="daotao"
+
+# In phiếu, QR: thêm máy in bằng: sudo smilelog-tv printer add TÊN IP
+# "yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn máy in.
+KIOSK_PRINTING="no"
+
 # --- Chế độ full ---
 # Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
 APP_URL="https://smilelog.vn/kho-viec"
@@ -50,6 +67,28 @@ SCREEN_DAYS="Mon..Sat"
 
 # Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
 REBOOT_AT="03:30"
+
+# Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
+# Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
+# vào /etc/smilelog-tv.tailscale-key, quyền 600. Không có khoá thì chạy: sudo smilelog-tv remote up
+# rồi mở đường link hiện ra. KHÔNG ghi khoá vào file cấu hình này (ai trên máy cũng đọc được).
+ENABLE_TAILSCALE="yes"
+TAILSCALE_HOSTNAME=""
+
+# RustDesk: xem và điều khiển màn hình từ xa. install.sh tự cài, đặt mật khẩu cố định (lưu ở
+# /etc/smilelog-tv.rustdesk-password, chỉ root đọc) và nâng cấp mỗi đêm.
+# Xem ID và mật khẩu: sudo smilelog-tv rustdesk
+# Lưu ý: RustDesk chỉ điều khiển được ở chế độ Đào tạo (chạy X11). Màn TV, Ca & Kho việc là kiosk
+# Wayland: xem màn hình qua Tailscale + chrome://inspect (README), hoặc đổi tạm sang Đào tạo.
+# RUSTDESK_VERSION trống = bản mới nhất; ghi số (ví dụ "1.5.1") để giữ cố định.
+ENABLE_RUSTDESK="yes"
+RUSTDESK_VERSION=""
+
+# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
+UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
+UPDATE_BRANCH="main"
+AUTO_UPDATE_AT="02:30"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).
