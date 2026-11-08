@@ -68,6 +68,13 @@ SCREEN_DAYS="Mon..Sat"
 # Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
 REBOOT_AT="03:30"
 
+# Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
+# Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
+# vào /etc/smilelog-tv.tailscale-key, quyền 600. Không có khoá thì chạy: sudo smilelog-tv remote up
+# rồi mở đường link hiện ra. KHÔNG ghi khoá vào file cấu hình này (ai trên máy cũng đọc được).
+ENABLE_TAILSCALE="yes"
+TAILSCALE_HOSTNAME=""
+
 # Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
 # Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
 UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"

@@ -9,6 +9,7 @@
 #   smilelog-tv doctor       kiểm tra máy chạy được gì, chưa được gì (gửi kết quả cho người hỗ trợ)
 #   smilelog-tv update       lấy bản mới nhất từ GitHub và cài lại (timer tự chạy mỗi đêm)
 #   smilelog-tv version      bản đang chạy
+#   smilelog-tv remote [up]  Tailscale: xem tên, IP để vào từ xa; "up" đăng nhập vào mạng của lab
 #   smilelog-tv restart      mở lại trình duyệt
 set -euo pipefail
 
@@ -313,12 +314,43 @@ cmd_update() {
       { log "Không tải được bản mới từ $repo"; exit 1; }
     if [ "$(git -C "$SRC" rev-parse HEAD)" = "$(git -C "$SRC" rev-parse FETCH_HEAD)" ] && [ "${1:-}" != --force ]; then
       echo "Đã là bản mới nhất: $(cmd_version)"
+      # Không có bản Smilelog TV mới vẫn nâng Tailscale nếu có bản mới.
+      if command -v tailscale >/dev/null; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -q --only-upgrade tailscale >/dev/null 2>&1 || true
+      fi
       return 0
     fi
     git -C "$SRC" reset --quiet --hard FETCH_HEAD
   fi
   log "Cập nhật lên: $(cmd_version)"
   "$SRC/smilelog-tv/install.sh"
+}
+
+TS_KEY=${SMILELOG_TV_TS_KEY:-/etc/smilelog-tv.tailscale-key}
+
+# Đưa máy vào mạng Tailscale của lab. Có khoá trong $TS_KEY (chỉ root đọc) thì tự đăng nhập;
+# không có thì Tailscale in ra một đường link, mở link đó trên điện thoại để duyệt máy.
+cmd_remote() {
+  command -v tailscale >/dev/null || { echo "Chưa cài Tailscale: đặt ENABLE_TAILSCALE=\"yes\" rồi chạy install.sh" >&2; exit 1; }
+  if [ "${1:-}" = up ]; then
+    local args=(--ssh --hostname="${TAILSCALE_HOSTNAME:-$(hostname)}")
+    if tailscale status >/dev/null 2>&1; then
+      tailscale set "${args[@]}"
+    elif [ -s "$TS_KEY" ]; then
+      tailscale up "${args[@]}" --auth-key="file:$TS_KEY"
+    elif [ ! -t 0 ]; then
+      # Chạy tự động (cập nhật ban đêm): không có ai để mở link, chỉ ghi lại.
+      log "Tailscale chưa đăng nhập: chạy tay sudo smilelog-tv remote up hoặc đặt khoá vào $TS_KEY"
+      return 1
+    else
+      echo "Chưa có khoá trong $TS_KEY: mở đường link dưới đây trên điện thoại để đăng nhập (chờ tối đa 2 phút)."
+      timeout 120 tailscale up "${args[@]}" || { echo "Chưa đăng nhập Tailscale. Chạy lại: sudo smilelog-tv remote up" >&2; return 1; }
+    fi
+    # Tailscale tự cập nhật khi có bản mới (không chặn nếu bản đang cài chưa hỗ trợ).
+    tailscale set --auto-update >/dev/null 2>&1 || true
+    log "Tailscale: $(tailscale ip -4 2>/dev/null | head -1)"
+  fi
+  tailscale status --self --peers=false 2>/dev/null || echo "Chưa đăng nhập Tailscale: sudo smilelog-tv remote up"
 }
 
 # Một dòng kết quả: OK / CHÚ Ý / LỖI + nội dung.
@@ -381,6 +413,13 @@ cmd_doctor() {
   else
     report CHÚ_Ý "Chế độ Đào tạo chưa bật (ENABLE_TRAINING)"
   fi
+  if ! command -v tailscale >/dev/null; then
+    report CHÚ_Ý "Chưa cài Tailscale: chưa vào máy từ xa được"
+  elif tailscale status >/dev/null 2>&1; then
+    report OK "Tailscale: $(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//') $(tailscale ip -4 2>/dev/null | head -1)"
+  else
+    report CHÚ_Ý "Tailscale chưa đăng nhập: sudo smilelog-tv remote up"
+  fi
   curl -fsS --max-time 8 -o /dev/null "${TV_URL:-https://smilelog.vn/}" 2>/dev/null && report OK "Ra được Smilelog" ||
     report LỖI "Không vào được ${TV_URL:-Smilelog}: kiểm tra mạng"
 }
@@ -428,6 +467,7 @@ case "${1:-}" in
   doctor)   cmd_doctor ;;
   update)   shift; cmd_update "$@" ;;
   version)  cmd_version ;;
+  remote)   shift; cmd_remote "$@" ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

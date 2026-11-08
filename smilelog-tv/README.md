@@ -60,9 +60,16 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 |---|---|
 | **Cập nhật** | Mỗi đêm lúc `AUTO_UPDATE_AT` (mặc định 02:30) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
 | **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
-| **Vào máy từ xa (đề xuất: Tailscale)** | Cài một lần trên mỗi máy: `curl -fsSL https://tailscale.com/install.sh \| sh` rồi `sudo tailscale up --ssh`, đăng nhập bằng tài khoản Tailscale của lab. Sau đó từ laptop ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ các lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router |
+| **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
 | **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
 | **Xem màn hình chế độ Đào tạo từ xa** | Ubuntu có sẵn Remote Desktop (Cài đặt → Hệ thống → Remote Desktop), kết nối qua Tailscale |
+
+**Khoá đăng nhập Tailscale** (cho nhiều máy, không phải mở link từng máy): Tailscale admin → Settings
+→ Keys → **Generate auth key**, chọn *Reusable*, gắn tag (ví dụ `tag:kiosk`) để khoá không hết hạn theo
+người tạo. Lưu trên từng máy:
+`sudo install -m 600 /dev/stdin /etc/smilelog-tv.tailscale-key` (dán khoá, Enter, Ctrl+D). Không ghi
+khoá vào `/etc/smilelog-tv.conf`, không gửi khoá qua chat. Trong Tailscale admin → Access controls,
+cho phép tài khoản quản lý SSH vào máy có tag này.
 
 Repo đang **public** nên máy tự cập nhật được không cần khoá. Nếu chuyển repo sang **private**, mỗi
 máy cần một khoá chỉ đọc (GitHub → Settings → Deploy keys) và `UPDATE_REPO` dạng

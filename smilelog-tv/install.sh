@@ -70,6 +70,17 @@ matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https
 jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
   install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
 
+if [ "${ENABLE_TAILSCALE:-yes}" = yes ]; then
+  echo "==> Tailscale (vào máy từ xa)"
+  # Cài từ kho chính thức của Tailscale; lần sau apt và tính năng tự cập nhật của Tailscale giữ bản mới.
+  command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh ||
+    echo "    Không cài được Tailscale: kiểm tra mạng rồi chạy lại install.sh"
+  if command -v tailscale >/dev/null; then
+    systemctl enable --now tailscaled
+    /usr/local/bin/smilelog-tv remote up || true
+  fi
+fi
+
 echo "==> USB, tải file, tải ảnh lên"
 # Cắm USB (FAT32/exFAT) là gắn vào /media/usb, mọi tài khoản đọc ghi được. Chromium hỏi chỗ lưu khi
 # tải file (Xuất Excel) và mở sẵn USB; khi chọn ảnh tải lên cũng chọn từ /media/usb.
