@@ -57,6 +57,12 @@ for g in video render input; do
   getent group "$g" >/dev/null && usermod -aG "$g" "$KIOSK_USER"
 done
 
+if [ "${DISPLAY_SERVER:-wayland}" = x11 ]; then
+  echo "==> Kiosk chạy X11"
+  # Xorg tối giản: không màn đăng nhập, không thanh tác vụ; chỉ Chromium toàn màn hình.
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q xserver-xorg xinit x11-xserver-utils unclutter matchbox-window-manager
+fi
+
 echo "==> Phím tắt và nút đổi chế độ"
 # Token chỉ root và tiện ích trong trình duyệt đọc được; trang web lạ không gọi được lệnh đổi chế độ.
 [ -s /etc/smilelog-tv.token ] || (umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' >/etc/smilelog-tv.token)
@@ -154,6 +160,14 @@ EOF
 fi
 
 echo "==> Dịch vụ systemd"
+if [ "${DISPLAY_SERVER:-wayland}" = x11 ]; then
+  KIOSK_SESSION_TYPE=x11
+  # Xorg chạy bằng tài khoản kiosk trên tty1 (phiên logind), không cần quyền root.
+  KIOSK_EXEC="/usr/bin/xinit /usr/local/bin/smilelog-tv x11-session -- /usr/bin/Xorg :0 vt1 -keeptty -nolisten tcp -s 0 -dpms"
+else
+  KIOSK_SESSION_TYPE=wayland
+  KIOSK_EXEC="/usr/bin/cage -s -- /usr/local/bin/smilelog-tv browser"
+fi
 cat >"$UNITS/smilelog-tv.service" <<EOF
 [Unit]
 Description=Smilelog Màn TV (kiosk)
@@ -174,8 +188,8 @@ StandardOutput=journal
 StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
-Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/usr/bin/cage -s -- /usr/local/bin/smilelog-tv browser
+Environment=XDG_SESSION_TYPE=$KIOSK_SESSION_TYPE
+ExecStart=$KIOSK_EXEC
 Restart=always
 RestartSec=5
 
