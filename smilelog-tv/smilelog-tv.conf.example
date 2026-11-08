@@ -15,6 +15,16 @@ MODE="tv"
 # Đặt "no" để ẩn nút nổi (phím tắt vẫn dùng được). Đổi xong chạy lại: sudo ./install.sh
 SHOW_SWITCH_BUTTON="yes"
 
+# Chế độ Đào tạo: giao diện Ubuntu (GNOME) với LibreOffice, Microsoft 365, Google Drive, mở file từ USB.
+# "yes" rồi chạy lại sudo ./install.sh (tải khoảng 1-2 GB lần đầu). Khi bật, nút ⇄ và Ctrl+Alt+M
+# đổi vòng: Màn TV -> Ca & Kho việc -> Đào tạo. Tài khoản Đào tạo không mật khẩu, không quyền quản trị.
+ENABLE_TRAINING="no"
+TRAINING_USER="daotao"
+
+# In phiếu, QR: thêm máy in bằng: sudo smilelog-tv printer add TÊN IP
+# "yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn máy in.
+KIOSK_PRINTING="no"
+
 # --- Chế độ full ---
 # Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
 APP_URL="https://smilelog.vn/kho-viec"
@@ -57,6 +67,12 @@ SCREEN_DAYS="Mon..Sat"
 
 # Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
 REBOOT_AT="03:30"
+
+# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
+UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
+UPDATE_BRANCH="main"
+AUTO_UPDATE_AT="02:30"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).

@@ -3,7 +3,7 @@
 (() => {
   if (window.top !== window || document.getElementById('smilelog-tv-switch')) return;
 
-  const LABEL = { tv: 'Màn TV', full: 'Danh sách ca & Kho việc' };
+  const LABEL = { tv: 'Màn TV', full: 'Danh sách ca & Kho việc', training: 'Đào tạo (Ubuntu, LibreOffice)' };
   const host = document.createElement('div');
   host.id = 'smilelog-tv-switch';
   host.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483647';
@@ -29,7 +29,7 @@
       <button class="pill" title="Đổi chế độ màn hình (Ctrl+Alt+M)" aria-label="Đổi chế độ màn hình">⇄</button>
       <div class="panel" role="dialog" aria-label="Đổi chế độ màn hình">
         <div class="now">Đang chạy: <b class="cur">…</b></div>
-        <button class="act main switch">Chuyển sang …</button>
+        <div class="targets"></div>
         <button class="act restart">Mở lại trình duyệt</button>
         <button class="act close">Đóng</button>
         <div class="msg" hidden></div>
@@ -53,13 +53,19 @@
       say('Không liên lạc được dịch vụ điều khiển trên máy.');
       return;
     }
-    const next = r.mode === 'tv' ? 'full' : 'tv';
-    $('.cur').textContent = LABEL[r.mode];
-    $('.switch').textContent = `Chuyển sang ${LABEL[next]}`;
-  });
-  $('.switch').addEventListener('click', async () => {
-    const r = await send('toggle');
-    say(r.ok ? 'Đang chuyển, màn hình sẽ tải lại trong vài giây…' : r.error ? 'Không chuyển được.' : 'Vừa chuyển xong, chờ vài giây.');
+    $('.cur').textContent = LABEL[r.mode] || r.mode;
+    const targets = $('.targets');
+    targets.textContent = '';
+    for (const m of (r.modes || ['tv', 'full']).filter((x) => x !== r.mode)) {
+      const b = document.createElement('button');
+      b.className = 'act main';
+      b.textContent = `Chuyển sang ${LABEL[m] || m}`;
+      b.addEventListener('click', async () => {
+        const res = await send(`mode/${m}`);
+        say(res.ok ? 'Đang chuyển, màn hình sẽ đổi trong vài giây…' : res.error ? 'Không chuyển được.' : 'Vừa chuyển xong, chờ vài giây.');
+      });
+      targets.appendChild(b);
+    }
   });
   $('.restart').addEventListener('click', async () => {
     const r = await send('restart');

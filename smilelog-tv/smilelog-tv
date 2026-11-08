@@ -2,9 +2,13 @@
 # smilelog-tv: chạy và giám sát Smilelog ở chế độ kiosk.
 #   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
-#   smilelog-tv mode [tv|full|toggle]  xem hoặc đổi chế độ: Màn TV, hay Danh sách ca + Kho việc
+#   smilelog-tv mode [tv|full|training|toggle]  xem hoặc đổi chế độ: Màn TV, Ca & Kho việc, Đào tạo
+#   smilelog-tv printer [list|add TÊN IP|default TÊN|test]  máy in cho phiếu, QR
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
+#   smilelog-tv doctor       kiểm tra máy chạy được gì, chưa được gì (gửi kết quả cho người hỗ trợ)
+#   smilelog-tv update       lấy bản mới nhất từ GitHub và cài lại (timer tự chạy mỗi đêm)
+#   smilelog-tv version      bản đang chạy
 #   smilelog-tv restart      mở lại trình duyệt
 set -euo pipefail
 
@@ -82,9 +86,47 @@ in_app_screens() {
 }
 
 restart_browser() {
+  if [ "$MODE" = training ]; then
+    log "Đang ở chế độ Đào tạo: không mở lại trình duyệt kiosk ($*)"
+    return 0
+  fi
   log "Mở lại trình duyệt: $*"
   rm -f "$STATE"/fail-*
   systemctl restart smilelog-tv.service
+}
+
+# Màn hình đăng nhập của Ubuntu/Debian (GDM). Chế độ Đào tạo chạy giao diện Ubuntu qua nó.
+dm_unit() {
+  local u
+  for u in gdm3.service gdm.service; do
+    if systemctl cat "$u" >/dev/null 2>&1; then echo "$u"; return 0; fi
+  done
+  return 1
+}
+
+training_available() {
+  [ "${ENABLE_TRAINING:-no}" = yes ] && id "${TRAINING_USER:-daotao}" >/dev/null 2>&1 && dm_unit >/dev/null
+}
+
+available_modes() {
+  if training_available; then echo "tv full training"; else echo "tv full"; fi
+}
+
+# Bật đúng thứ cần cho chế độ hiện tại, tắt thứ kia. Trạng thái enable giữ qua lần khởi động lại.
+apply_mode() {
+  local dm=""
+  dm=$(dm_unit) || dm=""
+  if [ "$MODE" = training ]; then
+    systemctl disable --now smilelog-tv.service
+    systemctl enable "$dm"
+    systemctl start "$dm"
+    log "Đã chuyển sang Đào tạo (giao diện Ubuntu)"
+  else
+    # Màn hình đăng nhập Ubuntu và kiosk cùng giành tty1: kiosk chạy thì tắt màn đăng nhập.
+    if [ -n "$dm" ]; then systemctl disable --now "$dm" 2>/dev/null || true; fi
+    systemctl enable smilelog-tv.service
+    restart_browser "chế độ $MODE"
+  fi
 }
 
 cmd_browser() {
@@ -110,6 +152,8 @@ cmd_browser() {
   if [ "${SHOW_SWITCH_BUTTON:-yes}" != no ] && [ -f "$EXTENSION/manifest.json" ]; then
     ext=(--load-extension="$EXTENSION")
   fi
+  # KIOSK_PRINTING="yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn.
+  if [ "${KIOSK_PRINTING:-no}" = yes ]; then ext+=(--kiosk-printing); fi
   exec "$browser" "${ext[@]}" \
     --kiosk --ozone-platform=wayland \
     --user-data-dir="$PROFILE" \
@@ -124,6 +168,8 @@ cmd_browser() {
 }
 
 cmd_watchdog() {
+  # Chế độ Đào tạo: không có kiosk để giám sát.
+  [ "$MODE" = training ] && return 0
   mkdir -p "$STATE"
   local json url
   if ! json=$(curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null); then
@@ -135,6 +181,14 @@ cmd_watchdog() {
   fi
   rm -f "$STATE/fail-devtools"
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
+
+  # Chế độ full: tab mở thêm (ví dụ "Xem 3D") không tính là lạc ra ngoài, miễn còn một tab ở đúng màn.
+  if [ "$MODE" = full ]; then
+    local u
+    while IFS= read -r u; do
+      if in_app_screens "$u"; then url=$u; break; fi
+    done < <(jq -r '.[] | select(.type == "page") | .url' <<<"$json")
+  fi
 
   # Chế độ full: không màn chờ, không báo động trang đăng nhập (người dùng tự đăng nhập).
   # Đứng ở màn khác (ngoài APP_PATHS), trang lỗi hoặc trang ngoài Smilelog quá 2 phút thì mở lại APP_URL.
@@ -182,21 +236,153 @@ cmd_watchdog() {
 }
 
 cmd_mode() {
-  local new=${1:-}
+  local new=${1:-} modes m next="" found=""
+  modes=$(available_modes)
   case "$new" in
     "") echo "$MODE"; return ;;
-    toggle) if [ "$MODE" = full ]; then new=tv; else new=full; fi ;;
+    --available) echo "$modes"; return ;;
+    toggle)
+      # Vòng: tv -> full -> training (nếu đã cài) -> tv
+      for m in $modes $modes; do
+        if [ -n "$found" ]; then next=$m; break; fi
+        [ "$m" = "$MODE" ] && found=1
+      done
+      new=${next:-tv}
+      ;;
     tv | full) ;;
-    *) echo "Dùng: smilelog-tv mode [tv|full|toggle]" >&2; exit 2 ;;
+    training)
+      if ! training_available; then
+        echo "Chưa cài chế độ Đào tạo: đặt ENABLE_TRAINING=\"yes\" trong $CONF rồi chạy lại install.sh" >&2
+        exit 1
+      fi
+      ;;
+    *) echo "Dùng: smilelog-tv mode [tv|full|training|toggle]" >&2; exit 2 ;;
   esac
   set -- "$new"
   if grep -q '^MODE=' "$CONF"; then
     sed -i "s/^MODE=.*/MODE=\"$1\"/" "$CONF"
   else
-    printf '\n# Chế độ chạy: tv hoặc full (đặt bằng: smilelog-tv mode)\nMODE="%s"\n' "$1" >>"$CONF"
+    printf '\n# Chế độ chạy: tv, full hoặc training (đặt bằng: smilelog-tv mode)\nMODE="%s"\n' "$1" >>"$CONF"
   fi
   MODE=$1
-  restart_browser "đổi chế độ sang $1"
+  apply_mode
+}
+
+cmd_printer() {
+  case "${1:-list}" in
+    list)
+      lpstat -v 2>/dev/null || echo "Chưa có máy in nào"
+      lpstat -d 2>/dev/null || true
+      ;;
+    add)
+      # Máy in mạng đời mới hiểu IPP Everywhere: không cần cài driver riêng.
+      [ $# -eq 3 ] || { echo "Dùng: smilelog-tv printer add TÊN IP (ví dụ: printer add phieu 192.168.1.50)" >&2; exit 2; }
+      lpadmin -p "$2" -E -v "ipp://$3/ipp/print" -m everywhere
+      log "Đã thêm máy in $2 ($3)"
+      lpstat -d 2>/dev/null | grep -q 'destination' || lpoptions -d "$2" >/dev/null
+      ;;
+    default)
+      [ $# -eq 2 ] || { echo "Dùng: smilelog-tv printer default TÊN" >&2; exit 2; }
+      lpoptions -d "$2" >/dev/null && log "Máy in mặc định: $2"
+      ;;
+    test)
+      echo "Smilelog TV: trang in thử $(date '+%d/%m/%Y %H:%M')" | lp && echo "Đã gửi trang in thử tới máy in mặc định"
+      ;;
+    *) echo "Dùng: smilelog-tv printer [list|add TÊN IP|default TÊN|test]" >&2; exit 2 ;;
+  esac
+}
+
+SRC=${SMILELOG_TV_SRC:-/opt/smilelog-tv-src}
+
+cmd_version() {
+  if [ -d "$SRC/.git" ]; then
+    git -C "$SRC" log -1 --format='%h %cd %s' --date=format:'%d/%m/%Y %H:%M'
+  else
+    echo "Cài tay, chưa qua smilelog-tv update"
+  fi
+}
+
+# Lấy bản mới nhất của UPDATE_BRANCH; có thay đổi thì chạy lại install.sh của bản đó.
+cmd_update() {
+  local repo=${UPDATE_REPO:-https://github.com/Brucedentalstudio/Bruce-tvkiosk.git} branch=${UPDATE_BRANCH:-main}
+  if [ ! -d "$SRC/.git" ]; then
+    git clone --quiet --depth 1 --branch "$branch" "$repo" "$SRC" ||
+      { log "Không tải được $repo (repo private thì cần khoá deploy, xem README)"; exit 1; }
+  else
+    git -C "$SRC" fetch --quiet --depth 1 origin "$branch" ||
+      { log "Không tải được bản mới từ $repo"; exit 1; }
+    if [ "$(git -C "$SRC" rev-parse HEAD)" = "$(git -C "$SRC" rev-parse FETCH_HEAD)" ] && [ "${1:-}" != --force ]; then
+      echo "Đã là bản mới nhất: $(cmd_version)"
+      return 0
+    fi
+    git -C "$SRC" reset --quiet --hard FETCH_HEAD
+  fi
+  log "Cập nhật lên: $(cmd_version)"
+  "$SRC/smilelog-tv/install.sh"
+}
+
+# Một dòng kết quả: OK / CHÚ Ý / LỖI + nội dung.
+report() {
+  local tag
+  case $1 in OK) tag="OK    " ;; LỖI) tag="LỖI   " ;; *) tag="CHÚ Ý " ;; esac  # printf đếm byte, không đếm chữ có dấu
+  printf '%s %s\n' "$tag" "$2"
+}
+
+# report chỉ printf nên luôn thành công: "điều kiện && report OK || report LỖI" an toàn ở đây.
+# shellcheck disable=SC2015
+cmd_doctor() {
+  local os browser dm modes p
+  os=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || os="không rõ"
+  echo "== Smilelog TV doctor: $(hostname), $(date '+%d/%m/%Y %H:%M')"
+  report OK "Hệ điều hành: $os; máy: $(cat /sys/class/dmi/id/product_name 2>/dev/null || echo không rõ)"
+  report OK "Chế độ: $MODE; các chế độ có thể dùng: $(available_modes)"
+  report OK "Phiên bản: $(cmd_version)"
+
+  browser=$(command -v chromium || command -v chromium-browser || true)
+  if [ -z "$browser" ]; then
+    report LỖI "Chưa cài Chromium"
+  elif [[ "$(readlink -f "$browser")" == */snap/* ]] || snap list chromium >/dev/null 2>&1; then
+    report LỖI "Chromium là bản snap: bị giới hạn thư mục, có thể không đọc được tiện ích, màn chờ, USB. Gửi kết quả này cho người hỗ trợ"
+  else
+    report OK "Chromium: $($browser --version 2>/dev/null | head -1)"
+  fi
+  command -v cage >/dev/null && report OK "cage đã cài" || report LỖI "Chưa cài cage"
+
+  if [ "$MODE" = training ]; then
+    systemctl is-active --quiet "$(dm_unit)" && report OK "Giao diện Đào tạo đang chạy" || report LỖI "Giao diện Đào tạo chưa chạy"
+  else
+    systemctl is-active --quiet smilelog-tv.service && report OK "Kiosk đang chạy" || report LỖI "Kiosk không chạy"
+    dm=$(dm_unit) && systemctl is-enabled --quiet "$dm" &&
+      report LỖI "Màn đăng nhập Ubuntu ($dm) đang bật cùng kiosk: hai bên giành màn hình. Chạy: sudo smilelog-tv mode $MODE"
+    p=$(curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null | jq -r '[.[] | select(.type == "page")][0].url // empty') || p=""
+    [ -n "$p" ] && report OK "Trang đang mở: $p" || report LỖI "Trình duyệt kiosk không phản hồi"
+    curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null | jq -e '.[] | select(.type == "service_worker")' >/dev/null &&
+      report OK "Tiện ích nút ⇄ đã nạp" || report CHÚ_Ý "Tiện ích nút ⇄ chưa nạp (phím tắt vẫn dùng được)"
+  fi
+
+  systemctl is-active --quiet smilelog-tv-control.service && report OK "Dịch vụ phím tắt và nút đang chạy" ||
+    report LỖI "Dịch vụ phím tắt và nút không chạy"
+  python3 -c 'import evdev' 2>/dev/null && report OK "python3-evdev có: phím tắt dùng được" ||
+    report CHÚ_Ý "Thiếu python3-evdev: không có phím tắt"
+  ls /dev/input/by-id/*-kbd >/dev/null 2>&1 && report OK "Đang cắm bàn phím" || report CHÚ_Ý "Không thấy bàn phím nào"
+
+  if command -v lpstat >/dev/null; then
+    p=$(lpstat -d 2>/dev/null | sed -n 's/.*: //p')
+    [ -n "$p" ] && report OK "Máy in mặc định: $p" || report CHÚ_Ý "Chưa có máy in mặc định: sudo smilelog-tv printer add TÊN IP"
+  else
+    report LỖI "Chưa cài CUPS: không in được"
+  fi
+  if mountpoint -q /media/usb; then report OK "USB đang gắn ở /media/usb"; else report CHÚ_Ý "Không có USB (cắm USB để tải file, chọn ảnh)"; fi
+
+  if [ "${ENABLE_TRAINING:-no}" = yes ]; then
+    id "${TRAINING_USER:-daotao}" >/dev/null 2>&1 && report OK "Tài khoản Đào tạo: ${TRAINING_USER:-daotao}" || report LỖI "Chưa có tài khoản Đào tạo"
+    dm_unit >/dev/null && report OK "Có giao diện Ubuntu ($(dm_unit))" || report LỖI "Chưa cài giao diện Ubuntu (GDM)"
+    command -v libreoffice >/dev/null && report OK "LibreOffice đã cài" || report LỖI "Chưa cài LibreOffice"
+  else
+    report CHÚ_Ý "Chế độ Đào tạo chưa bật (ENABLE_TRAINING)"
+  fi
+  curl -fsS --max-time 8 -o /dev/null "${TV_URL:-https://smilelog.vn/}" 2>/dev/null && report OK "Ra được Smilelog" ||
+    report LỖI "Không vào được ${TV_URL:-Smilelog}: kiểm tra mạng"
 }
 
 cmd_screen() {
@@ -213,7 +399,9 @@ cmd_screen() {
 cmd_status() {
   systemctl --no-pager --lines=0 status smilelog-tv.service || true
   echo
-  if [ "$MODE" = full ]; then
+  if [ "$MODE" = training ]; then
+    echo "Chế độ: training (Đào tạo, giao diện Ubuntu)"
+  elif [ "$MODE" = full ]; then
     echo "Chế độ: full (Danh sách ca + Kho việc: ${APP_PATHS:-/orders /kho-viec})"
   elif in_work_hours; then
     echo "Chế độ: tv, giờ làm (Màn TV)"
@@ -233,8 +421,13 @@ case "${1:-}" in
   browser)  cmd_browser ;;
   watchdog) cmd_watchdog ;;
   mode)     shift; cmd_mode "$@" ;;
+  apply)    apply_mode ;;
+  printer)  shift; cmd_printer "$@" ;;
   screen)   shift; cmd_screen "$@" ;;
   status)   cmd_status ;;
+  doctor)   cmd_doctor ;;
+  update)   shift; cmd_update "$@" ;;
+  version)  cmd_version ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
