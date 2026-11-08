@@ -45,6 +45,11 @@ EXPECTED_PATH="/production-tv"
 # URL chứa chuỗi này được coi là trang đăng nhập: watchdog báo động, không khởi động lại.
 LOGIN_PATTERN="login"
 
+# Cách kiosk vẽ màn hình (Màn TV, Ca & Kho việc). Đổi xong chạy lại: sudo ./install.sh
+#   wayland : cage, gọn và khoá chặt nhất; RustDesk không xem được màn hình kiosk.
+#   x11     : Xorg; RustDesk xem và điều khiển được mọi chế độ. Thử trên một máy trước khi đổi hàng loạt.
+DISPLAY_SERVER="wayland"
+
 # Độ phân giải xuất ra TV. 1080p giúp Pi chạy mát và mượt hơn 4K; ở 55" nhìn xa không thấy khác.
 # Để trống để dùng độ phân giải mặc định của TV. Đổi xong cần khởi động lại máy.
 RESOLUTION="1920x1080"
