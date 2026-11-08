@@ -15,7 +15,10 @@ command -v apt-get >/dev/null || { echo "Chỉ hỗ trợ hệ Debian (Raspberry
 echo "==> Cài gói"
 apt-get update -q
 if apt-cache show chromium >/dev/null 2>&1; then BROWSER_PKG=chromium; else BROWSER_PKG=chromium-browser; fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q cage "$BROWSER_PKG" jq curl v4l-utils
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q cage "$BROWSER_PKG" jq curl v4l-utils python3
+# python3-evdev bắt phím tắt Ctrl+Alt+M / Ctrl+Alt+R; thiếu gói này thì chỉ còn nút nổi trên màn hình.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-evdev ||
+  echo "    Không cài được python3-evdev: phím tắt sẽ không chạy, nút nổi vẫn dùng được"
 # wlr-randr đổi độ phân giải ngay trong phiên kiosk; bản phân phối cũ có thể không có gói này.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q wlr-randr ||
   echo "    Không cài được wlr-randr: độ phân giải chỉ đặt qua cmdline.txt"
@@ -26,6 +29,7 @@ echo "==> Cấu hình"
 . "$CONF"
 install -m 755 "$HERE/smilelog-tv" /usr/local/bin/smilelog-tv
 install -D -m 644 "$HERE/screensaver.html" /usr/local/share/smilelog-tv/screensaver.html
+install -m 755 "$HERE/smilelog-tv-control" /usr/local/bin/smilelog-tv-control
 
 if [ -n "${TIMEZONE:-}" ]; then
   timedatectl set-timezone "$TIMEZONE"
@@ -38,6 +42,19 @@ id "$KIOSK_USER" >/dev/null 2>&1 ||
 for g in video render input; do
   getent group "$g" >/dev/null && usermod -aG "$g" "$KIOSK_USER"
 done
+
+echo "==> Phím tắt và nút đổi chế độ"
+# Token chỉ root và tiện ích trong trình duyệt đọc được; trang web lạ không gọi được lệnh đổi chế độ.
+[ -s /etc/smilelog-tv.token ] || (umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' >/etc/smilelog-tv.token)
+EXT=/usr/local/share/smilelog-tv/extension
+install -d -m 750 -g "$KIOSK_USER" "$EXT"
+install -m 640 -g "$KIOSK_USER" "$HERE/extension/background.js" "$HERE/extension/content.js" "$EXT/"
+jq -n --arg t "$(cat /etc/smilelog-tv.token)" '{token: $t}' | install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/token.json"
+# Nút chỉ hiện trên các trang Smilelog: tên miền của TV_URL, APP_URL và APP_HOSTS (cả tên miền con).
+hosts=$(printf '%s\n' "${TV_URL:-}" "${APP_URL:-}" | sed -nE 's#^https?://([^/:]+).*#\1#p'; tr ' ' '\n' <<<"${APP_HOSTS:-}")
+matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https://" + .), ("https://*." + .) | . + "/*"' | jq -s .)
+jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
+  install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
 
 echo "==> Dịch vụ systemd"
 cat >"$UNITS/smilelog-tv.service" <<EOF
@@ -67,6 +84,19 @@ RestartSec=5
 
 [Install]
 WantedBy=graphical.target
+EOF
+
+cat >"$UNITS/smilelog-tv-control.service" <<EOF
+[Unit]
+Description=Smilelog Màn TV: phím tắt và nút đổi chế độ
+
+[Service]
+ExecStart=/usr/local/bin/smilelog-tv-control
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 cat >"$UNITS/smilelog-tv-watchdog.service" <<EOF
@@ -125,7 +155,8 @@ EOF
 systemctl daemon-reload
 systemctl disable getty@tty1.service 2>/dev/null || true
 systemctl set-default graphical.target
-systemctl enable smilelog-tv.service smilelog-tv-watchdog.timer
+systemctl enable smilelog-tv.service smilelog-tv-watchdog.timer smilelog-tv-control.service
+systemctl restart smilelog-tv-control.service
 systemctl start smilelog-tv-watchdog.timer
 
 if [ -e /dev/cec0 ]; then

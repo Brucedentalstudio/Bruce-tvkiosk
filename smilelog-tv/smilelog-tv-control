@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""smilelog-tv-control: đổi chế độ ngay trên TV, không cần SSH.
+
+- Phím tắt từ mọi bàn phím cắm vào máy: Ctrl+Alt+M đổi tv <-> full, Ctrl+Alt+R mở lại trình duyệt.
+- HTTP chỉ nghe 127.0.0.1 cho nút nổi trong trình duyệt. Mọi lệnh cần token trong /etc/smilelog-tv.token,
+  nên trang web lạ mở trên máy không gọi được.
+Chạy bằng systemd (smilelog-tv-control.service), cần quyền root để đọc /dev/input và đổi chế độ.
+"""
+import hmac
+import json
+import os
+import selectors
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+CLI = os.environ.get("SMILELOG_TV_CLI", "/usr/local/bin/smilelog-tv")
+TOKEN_FILE = os.environ.get("SMILELOG_TV_TOKEN", "/etc/smilelog-tv.token")
+PORT = int(os.environ.get("SMILELOG_TV_CONTROL_PORT", "9333"))
+COOLDOWN = 5  # giây: bấm lặp trong lúc trình duyệt đang mở lại thì bỏ qua
+
+# Mã phím Linux (linux/input-event-codes.h), khai báo sẵn để không phụ thuộc evdev khi chạy thử.
+KEY_LEFTCTRL, KEY_RIGHTCTRL, KEY_LEFTALT, KEY_RIGHTALT = 29, 97, 56, 100
+KEY_M, KEY_R = 50, 19
+HOTKEYS = {KEY_M: "toggle", KEY_R: "restart"}
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+class Actions:
+    """Chạy lệnh smilelog-tv ở nền, có khoảng nghỉ để không đổi chế độ hai lần liền."""
+
+    def __init__(self, cli=CLI, cooldown=COOLDOWN):
+        self.cli, self.cooldown = cli, cooldown
+        self.lock = threading.Lock()
+        self.last = 0.0
+
+    def run(self, action):
+        args = {"toggle": ["mode", "toggle"], "restart": ["restart"]}[action]
+        with self.lock:
+            now = time.monotonic()
+            if now - self.last < self.cooldown:
+                log(f"Bỏ qua {action}: vừa thực hiện lệnh trước")
+                return False
+            self.last = now
+        log(f"Thực hiện: {action}")
+        # Không chờ: lệnh sẽ mở lại trình duyệt, kể cả trang vừa gửi yêu cầu.
+        subprocess.Popen([self.cli, *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+
+    def mode(self):
+        try:
+            out = subprocess.run([self.cli, "mode"], capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+        return out if out in ("tv", "full") else "tv"
+
+
+class Hotkeys:
+    """Theo dõi phím đang giữ trên một bàn phím; Ctrl+Alt+<phím> thì gọi trigger(action)."""
+
+    def __init__(self, trigger):
+        self.trigger = trigger
+        self.down = set()
+
+    def feed(self, code, value):
+        if value == 0:  # nhả phím
+            self.down.discard(code)
+            return
+        if value != 1:  # 2 = giữ phím (lặp), không tính
+            return
+        self.down.add(code)
+        ctrl = self.down & {KEY_LEFTCTRL, KEY_RIGHTCTRL}
+        alt = self.down & {KEY_LEFTALT, KEY_RIGHTALT}
+        if ctrl and alt and code in HOTKEYS:
+            self.trigger(HOTKEYS[code])
+
+
+def read_token():
+    with open(TOKEN_FILE) as f:
+        return f.read().strip()
+
+
+def make_handler(actions, token):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass
+
+        def reply(self, status, body):
+            data = json.dumps(body).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def authorized(self):
+            got = self.headers.get("X-Smilelog-Token", "")
+            return bool(token) and hmac.compare_digest(got.encode(), token.encode())
+
+        def do_GET(self):
+            if not self.authorized():
+                return self.reply(403, {"error": "forbidden"})
+            if self.path == "/mode":
+                return self.reply(200, {"mode": actions.mode()})
+            self.reply(404, {"error": "not found"})
+
+        def do_POST(self):
+            if not self.authorized():
+                return self.reply(403, {"error": "forbidden"})
+            action = self.path.strip("/")
+            if action not in ("toggle", "restart"):
+                return self.reply(404, {"error": "not found"})
+            self.reply(200, {"ok": actions.run(action)})
+
+    return Handler
+
+
+def keyboard_loop(actions):
+    try:
+        import evdev
+    except ImportError:
+        log("Chưa cài python3-evdev: không có phím tắt, chỉ còn nút trên màn hình")
+        return
+    sel = selectors.DefaultSelector()
+    opened = {}  # đường dẫn -> (device, Hotkeys)
+    last_scan = 0.0
+    while True:
+        # Quét lại mỗi 5 giây để nhận bàn phím cắm sau khi máy đã chạy.
+        if time.monotonic() - last_scan > 5:
+            last_scan = time.monotonic()
+            for path in evdev.list_devices():
+                if path in opened:
+                    continue
+                try:
+                    dev = evdev.InputDevice(path)
+                    keys = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
+                    if KEY_M not in keys or KEY_LEFTCTRL not in keys:
+                        dev.close()
+                        continue
+                except OSError:
+                    continue
+                opened[path] = (dev, Hotkeys(actions.run))
+                sel.register(dev, selectors.EVENT_READ, path)
+                log(f"Nghe phím tắt trên: {dev.name}")
+        for key, _ in sel.select(timeout=1):
+            path = key.data
+            dev, hk = opened[path]
+            try:
+                for ev in dev.read():
+                    if ev.type == evdev.ecodes.EV_KEY:
+                        hk.feed(ev.code, ev.value)
+            except OSError:  # rút bàn phím ra
+                sel.unregister(dev)
+                del opened[path]
+                log(f"Bàn phím đã rút: {path}")
+
+
+def main():
+    actions = Actions()
+    token = read_token()
+    threading.Thread(target=keyboard_loop, args=(actions,), daemon=True).start()
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), make_handler(actions, token))
+    log(f"Nghe lệnh tại 127.0.0.1:{PORT}")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

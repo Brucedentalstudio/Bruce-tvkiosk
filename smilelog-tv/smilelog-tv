@@ -2,7 +2,7 @@
 # smilelog-tv: chạy và giám sát Smilelog ở chế độ kiosk.
 #   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
-#   smilelog-tv mode [tv|full]  xem hoặc đổi chế độ: Màn TV, hay Danh sách ca + Kho việc
+#   smilelog-tv mode [tv|full|toggle]  xem hoặc đổi chế độ: Màn TV, hay Danh sách ca + Kho việc
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
 #   smilelog-tv restart      mở lại trình duyệt
@@ -13,6 +13,7 @@ PROFILE=${SMILELOG_TV_PROFILE:-/var/lib/smilelog-tv/profile}
 STATE=${SMILELOG_TV_STATE:-/run/smilelog-tv}
 DEVTOOLS=${SMILELOG_TV_DEVTOOLS:-http://127.0.0.1:9222}
 SAVER_URL=${SMILELOG_TV_SAVER_URL:-file:///usr/local/share/smilelog-tv/screensaver.html}
+EXTENSION=${SMILELOG_TV_EXTENSION:-/usr/local/share/smilelog-tv/extension}
 
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
@@ -104,7 +105,12 @@ cmd_browser() {
         log "Không đặt được độ phân giải $RESOLUTION trên $output"
     fi
   fi
-  exec "$browser" \
+  # Nút nổi đổi chế độ (tiện ích Chromium). SHOW_SWITCH_BUTTON="no" để ẩn; phím tắt vẫn dùng được.
+  local ext=()
+  if [ "${SHOW_SWITCH_BUTTON:-yes}" != no ] && [ -f "$EXTENSION/manifest.json" ]; then
+    ext=(--load-extension="$EXTENSION")
+  fi
+  exec "$browser" "${ext[@]}" \
     --kiosk --ozone-platform=wayland \
     --user-data-dir="$PROFILE" \
     --no-first-run --noerrdialogs --disable-infobars \
@@ -176,11 +182,14 @@ cmd_watchdog() {
 }
 
 cmd_mode() {
-  case "${1:-}" in
+  local new=${1:-}
+  case "$new" in
     "") echo "$MODE"; return ;;
+    toggle) if [ "$MODE" = full ]; then new=tv; else new=full; fi ;;
     tv | full) ;;
-    *) echo "Dùng: smilelog-tv mode [tv|full]" >&2; exit 2 ;;
+    *) echo "Dùng: smilelog-tv mode [tv|full|toggle]" >&2; exit 2 ;;
   esac
+  set -- "$new"
   if grep -q '^MODE=' "$CONF"; then
     sed -i "s/^MODE=.*/MODE=\"$1\"/" "$CONF"
   else

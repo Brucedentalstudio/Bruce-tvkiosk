@@ -8,6 +8,13 @@
 #          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
 MODE="tv"
 
+# Đổi chế độ ngay trên TV, không cần SSH:
+#   - Phím tắt (cắm bàn phím USB hoặc bàn phím không dây): Ctrl+Alt+M đổi chế độ,
+#     Ctrl+Alt+R mở lại trình duyệt.
+#   - Nút nổi ⇄ ở góc dưới bên trái: bấm để mở bảng, bấm "Chuyển sang ..." để xác nhận.
+# Đặt "no" để ẩn nút nổi (phím tắt vẫn dùng được). Đổi xong chạy lại: sudo ./install.sh
+SHOW_SWITCH_BUTTON="yes"
+
 # --- Chế độ full ---
 # Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
 APP_URL="https://smilelog.vn/kho-viec"

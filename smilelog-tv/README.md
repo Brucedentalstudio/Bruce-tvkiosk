@@ -18,13 +18,22 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
 ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
-Đổi chế độ ngay trên máy, không cần cài lại:
+### Đổi chế độ ngay trên TV
 
-```bash
-sudo smilelog-tv mode full   # Danh sách ca + Kho việc
-sudo smilelog-tv mode tv     # quay về Màn TV
-sudo smilelog-tv mode        # xem đang ở chế độ nào
-```
+| Cách | Thao tác |
+|---|---|
+| **Nút nổi** ⇄ góc dưới bên trái | Bấm ⇄ để mở bảng, bấm **"Chuyển sang …"** để xác nhận. Bảng có thêm **"Mở lại trình duyệt"**, tự đóng sau 8 giây |
+| **Phím tắt** (cắm bàn phím USB hoặc không dây) | **Ctrl+Alt+M** đổi chế độ, **Ctrl+Alt+R** mở lại trình duyệt |
+| **SSH** | `sudo smilelog-tv mode full`, `mode tv`, `mode toggle`, hoặc `mode` để xem chế độ hiện tại |
+
+- Màn hình tải lại trong vài giây sau khi đổi. Bấm lặp trong 5 giây đó bị bỏ qua, nên không đổi
+  nhầm hai lần.
+- Nút nổi chỉ hiện trên trang Smilelog, mờ đi khi không dùng. Không hiện trên màn chờ ngoài giờ;
+  lúc đó dùng phím tắt.
+- Ẩn nút nổi trên TV chỉ để xem: đặt `SHOW_SWITCH_BUTTON="no"` rồi chạy lại `sudo ./install.sh`.
+  Phím tắt vẫn dùng được.
+- Nút và phím tắt gọi dịch vụ `smilelog-tv-control` chỉ nghe trong máy (`127.0.0.1:9333`) và cần
+  mã khoá trong `/etc/smilelog-tv.token`, nên trang web khác mở trên máy không đổi được chế độ.
 
 ## Vì sao không cài thẳng lên TV Samsung
 
@@ -102,7 +111,8 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 ```bash
 sudo smilelog-tv status     # trang đang mở, lịch hẹn giờ, 20 dòng log gần nhất
 sudo smilelog-tv restart    # mở lại trình duyệt
-sudo smilelog-tv mode full  # đổi chế độ (tv | full), mở lại trình duyệt ngay
+sudo smilelog-tv mode full  # đổi chế độ (tv | full | toggle), mở lại trình duyệt ngay
+sudo journalctl -u smilelog-tv-control -n 20  # nhật ký phím tắt và nút nổi
 sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)
