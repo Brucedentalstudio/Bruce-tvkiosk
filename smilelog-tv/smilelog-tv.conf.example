@@ -1,7 +1,24 @@
-# Cấu hình máy chiếu Màn TV Smilelog.
+# Cấu hình máy chạy Smilelog: Màn TV (tv) hoặc Danh sách ca + Kho việc (full).
 # install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
+# Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (TV treo xưởng)
+#   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
+#          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
+MODE="tv"
+
+# --- Chế độ full ---
+# Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
+APP_URL="https://smilelog.vn/kho-viec"
+# Các màn được phép, cách nhau bởi dấu cách. Tính cả trang con (/orders/123, /orders/new)
+# và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
+APP_PATHS="/orders /kho-viec"
+# Tên miền của Smilelog, cách nhau bởi dấu cách (khớp cả tên miền con).
+# Để trống thì lấy tên miền của APP_URL.
+APP_HOSTS=""
+
+# --- Chế độ tv ---
 # Trang mở khi bật máy. Kiểm tra lại tên miền Prod trước khi dùng.
 TV_URL="https://smilelog.vn/production-tv"
 

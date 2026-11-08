@@ -1,7 +1,8 @@
 #!/bin/bash
-# smilelog-tv: chạy và giám sát Màn TV Smilelog ở chế độ kiosk.
+# smilelog-tv: chạy và giám sát Smilelog ở chế độ kiosk.
 #   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
+#   smilelog-tv mode [tv|full]  xem hoặc đổi chế độ: Màn TV, hay Danh sách ca + Kho việc
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
 #   smilelog-tv restart      mở lại trình duyệt
@@ -15,6 +16,8 @@ SAVER_URL=${SMILELOG_TV_SAVER_URL:-file:///usr/local/share/smilelog-tv/screensav
 
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
+# Cấu hình cũ chưa có MODE thì giữ cách chạy cũ: Màn TV.
+MODE=${MODE:-tv}
 
 log() { logger -t smilelog-tv -- "$*" 2>/dev/null || true; echo "$*" >&2; }
 
@@ -54,7 +57,27 @@ in_work_hours() {
 }
 
 desired_url() {
+  if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/kho-viec}"; return; fi
   if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
+}
+
+# Chế độ full: hợp lệ khi đang ở Smilelog (tên miền APP_HOSTS, mặc định lấy từ APP_URL, khớp cả
+# tên miền con) VÀ ở một trong các màn APP_PATHS (kể cả trang con: /orders/123) hoặc trang đăng nhập.
+in_app_screens() {
+  local url=$1 host path app_hosts h p ok=""
+  host=$(sed -E 's#^https?://([^/:]+).*#\1#; t; s#.*##' <<<"$url")
+  [ -n "$host" ] || return 1
+  app_hosts=${APP_HOSTS:-$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"${APP_URL:-https://smilelog.vn/kho-viec}")}
+  for h in $app_hosts; do
+    if [ "$host" = "$h" ] || [[ "$host" == *".$h" ]]; then ok=1; fi
+  done
+  [ -n "$ok" ] || return 1
+  [[ "$url" == *"$LOGIN_PATTERN"* ]] && return 0
+  path=$(sed -E 's#^https?://[^/]+##; s#[?\#].*##' <<<"$url")
+  for p in ${APP_PATHS:-/orders /kho-viec}; do
+    if [ "$path" = "$p" ] || [[ "$path" == "$p/"* ]]; then return 0; fi
+  done
+  return 1
 }
 
 restart_browser() {
@@ -107,6 +130,17 @@ cmd_watchdog() {
   rm -f "$STATE/fail-devtools"
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
 
+  # Chế độ full: không màn chờ, không báo động trang đăng nhập (người dùng tự đăng nhập).
+  # Đứng ở màn khác (ngoài APP_PATHS), trang lỗi hoặc trang ngoài Smilelog quá 2 phút thì mở lại APP_URL.
+  if [ "$MODE" = full ]; then
+    if in_app_screens "$url"; then
+      rm -f "$STATE"/fail-*
+    elif [ "$(bump fail-page)" -ge 2 ]; then
+      restart_browser "đang ở màn ngoài phạm vi: ${url:-<không có trang>}"
+    fi
+    return 0
+  fi
+
   # Ngoài giờ làm: chỉ cần đang ở màn chờ; trang khác (kể cả Màn TV) thì chuyển sang màn chờ.
   if ! in_work_hours; then
     case "$url" in
@@ -141,6 +175,21 @@ cmd_watchdog() {
   esac
 }
 
+cmd_mode() {
+  case "${1:-}" in
+    "") echo "$MODE"; return ;;
+    tv | full) ;;
+    *) echo "Dùng: smilelog-tv mode [tv|full]" >&2; exit 2 ;;
+  esac
+  if grep -q '^MODE=' "$CONF"; then
+    sed -i "s/^MODE=.*/MODE=\"$1\"/" "$CONF"
+  else
+    printf '\n# Chế độ chạy: tv hoặc full (đặt bằng: smilelog-tv mode)\nMODE="%s"\n' "$1" >>"$CONF"
+  fi
+  MODE=$1
+  restart_browser "đổi chế độ sang $1"
+}
+
 cmd_screen() {
   local dev=/dev/cec0
   [ -e "$dev" ] || { log "Không có $dev: máy này không điều khiển TV qua HDMI-CEC được"; exit 1; }
@@ -155,7 +204,13 @@ cmd_screen() {
 cmd_status() {
   systemctl --no-pager --lines=0 status smilelog-tv.service || true
   echo
-  if in_work_hours; then echo "Chế độ: giờ làm (Màn TV)"; else echo "Chế độ: ngoài giờ (màn chờ)"; fi
+  if [ "$MODE" = full ]; then
+    echo "Chế độ: full (Danh sách ca + Kho việc: ${APP_PATHS:-/orders /kho-viec})"
+  elif in_work_hours; then
+    echo "Chế độ: tv, giờ làm (Màn TV)"
+  else
+    echo "Chế độ: tv, ngoài giờ (màn chờ)"
+  fi
   echo "Trang đang mở:"
   curl -fsS --max-time 5 "$DEVTOOLS/json/list" 2>/dev/null |
     jq -r '.[] | select(.type == "page") | "  " + .url' || echo "  (trình duyệt không phản hồi)"
@@ -168,8 +223,9 @@ cmd_status() {
 case "${1:-}" in
   browser)  cmd_browser ;;
   watchdog) cmd_watchdog ;;
+  mode)     shift; cmd_mode "$@" ;;
   screen)   shift; cmd_screen "$@" ;;
   status)   cmd_status ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
