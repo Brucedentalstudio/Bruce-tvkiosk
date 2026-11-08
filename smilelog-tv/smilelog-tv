@@ -2,7 +2,7 @@
 # smilelog-tv: chạy và giám sát Smilelog ở chế độ kiosk.
 #   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
-#   smilelog-tv mode [tv|full]  xem hoặc đổi chế độ: Màn TV, hay toàn bộ phần mềm Smilelog
+#   smilelog-tv mode [tv|full]  xem hoặc đổi chế độ: Màn TV, hay Danh sách ca + Kho việc
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
 #   smilelog-tv restart      mở lại trình duyệt
@@ -57,20 +57,25 @@ in_work_hours() {
 }
 
 desired_url() {
-  if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/}"; return; fi
+  if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/kho-viec}"; return; fi
   if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
 }
 
-# Chế độ full: trang thuộc Smilelog là hợp lệ (người dùng đi khắp phần mềm, kể cả trang đăng nhập).
-# Không có APP_HOSTS thì lấy tên miền của APP_URL. Khớp cả tên miền con (www., staging.).
-on_app_host() {
-  local host app_hosts h
-  host=$(sed -E 's#^https?://([^/:]+).*#\1#; t; s#.*##' <<<"$1")
+# Chế độ full: hợp lệ khi đang ở Smilelog (tên miền APP_HOSTS, mặc định lấy từ APP_URL, khớp cả
+# tên miền con) VÀ ở một trong các màn APP_PATHS (kể cả trang con: /orders/123) hoặc trang đăng nhập.
+in_app_screens() {
+  local url=$1 host path app_hosts h p ok=""
+  host=$(sed -E 's#^https?://([^/:]+).*#\1#; t; s#.*##' <<<"$url")
   [ -n "$host" ] || return 1
-  app_hosts=${APP_HOSTS:-$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"${APP_URL:-https://smilelog.vn/}")}
+  app_hosts=${APP_HOSTS:-$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"${APP_URL:-https://smilelog.vn/kho-viec}")}
   for h in $app_hosts; do
-    [ "$host" = "$h" ] && return 0
-    [[ "$host" == *".$h" ]] && return 0
+    if [ "$host" = "$h" ] || [[ "$host" == *".$h" ]]; then ok=1; fi
+  done
+  [ -n "$ok" ] || return 1
+  [[ "$url" == *"$LOGIN_PATTERN"* ]] && return 0
+  path=$(sed -E 's#^https?://[^/]+##; s#[?\#].*##' <<<"$url")
+  for p in ${APP_PATHS:-/orders /kho-viec}; do
+    if [ "$path" = "$p" ] || [[ "$path" == "$p/"* ]]; then return 0; fi
   done
   return 1
 }
@@ -125,13 +130,13 @@ cmd_watchdog() {
   rm -f "$STATE/fail-devtools"
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
 
-  # Chế độ full: không màn chờ, không ép về một trang, không báo động trang đăng nhập.
-  # Chỉ mở lại khi trình duyệt đứng ở trang lỗi hoặc trang ngoài Smilelog quá 2 phút.
+  # Chế độ full: không màn chờ, không báo động trang đăng nhập (người dùng tự đăng nhập).
+  # Đứng ở màn khác (ngoài APP_PATHS), trang lỗi hoặc trang ngoài Smilelog quá 2 phút thì mở lại APP_URL.
   if [ "$MODE" = full ]; then
-    if on_app_host "$url"; then
+    if in_app_screens "$url"; then
       rm -f "$STATE"/fail-*
     elif [ "$(bump fail-page)" -ge 2 ]; then
-      restart_browser "đang ở trang ngoài Smilelog: ${url:-<không có trang>}"
+      restart_browser "đang ở màn ngoài phạm vi: ${url:-<không có trang>}"
     fi
     return 0
   fi
@@ -200,7 +205,7 @@ cmd_status() {
   systemctl --no-pager --lines=0 status smilelog-tv.service || true
   echo
   if [ "$MODE" = full ]; then
-    echo "Chế độ: full (toàn bộ phần mềm Smilelog)"
+    echo "Chế độ: full (Danh sách ca + Kho việc: ${APP_PATHS:-/orders /kho-viec})"
   elif in_work_hours; then
     echo "Chế độ: tv, giờ làm (Màn TV)"
   else

@@ -8,17 +8,20 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 | | `tv` (mặc định) | `full` |
 |---|---|---|
 | Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối: có bàn phím, chuột |
-| Mở trang | `TV_URL` (`/production-tv`) | `APP_URL` (trang chủ Smilelog), đi được khắp phần mềm |
-| Bấm sang trang khác | Sau 2 phút tự quay về Màn TV | Được phép, miễn còn trong Smilelog (`APP_HOSTS`) |
+| Màn được mở | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con như chi tiết ca |
+| Mở lúc bật máy | `TV_URL` | `APP_URL` (mặc định Kho việc) |
+| Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` |
 | Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường, người dùng tự đăng nhập |
 | Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ, không ngắt người đang làm |
-| Trang lỗi, trang ngoài Smilelog | Mở lại sau 2 phút | Mở lại `APP_URL` sau 2 phút |
 | Tài khoản nên dùng | Tài khoản riêng, chỉ được xem | Tài khoản của từng người, đăng xuất khi rời máy |
+
+Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
+ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
 Đổi chế độ ngay trên máy, không cần cài lại:
 
 ```bash
-sudo smilelog-tv mode full   # chạy toàn bộ phần mềm
+sudo smilelog-tv mode full   # Danh sách ca + Kho việc
 sudo smilelog-tv mode tv     # quay về Màn TV
 sudo smilelog-tv mode        # xem đang ở chế độ nào
 ```
