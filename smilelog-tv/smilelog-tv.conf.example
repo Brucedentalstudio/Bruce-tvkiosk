@@ -1,7 +1,41 @@
-# Cấu hình máy chiếu Màn TV Smilelog.
+# Cấu hình máy chạy Smilelog: Màn TV (tv) hoặc Danh sách ca + Kho việc (full).
 # install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
+# Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (TV treo xưởng)
+#   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
+#          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
+MODE="tv"
+
+# Đổi chế độ ngay trên TV, không cần SSH:
+#   - Phím tắt (cắm bàn phím USB hoặc bàn phím không dây): Ctrl+Alt+M đổi chế độ,
+#     Ctrl+Alt+R mở lại trình duyệt.
+#   - Nút nổi ⇄ ở góc dưới bên trái: bấm để mở bảng, bấm "Chuyển sang ..." để xác nhận.
+# Đặt "no" để ẩn nút nổi (phím tắt vẫn dùng được). Đổi xong chạy lại: sudo ./install.sh
+SHOW_SWITCH_BUTTON="yes"
+
+# Chế độ Đào tạo: giao diện Ubuntu (GNOME) với LibreOffice, Microsoft 365, Google Drive, mở file từ USB.
+# "yes" rồi chạy lại sudo ./install.sh (tải khoảng 1-2 GB lần đầu). Khi bật, nút ⇄ và Ctrl+Alt+M
+# đổi vòng: Màn TV -> Ca & Kho việc -> Đào tạo. Tài khoản Đào tạo không mật khẩu, không quyền quản trị.
+ENABLE_TRAINING="no"
+TRAINING_USER="daotao"
+
+# In phiếu, QR: thêm máy in bằng: sudo smilelog-tv printer add TÊN IP
+# "yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn máy in.
+KIOSK_PRINTING="no"
+
+# --- Chế độ full ---
+# Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
+APP_URL="https://smilelog.vn/kho-viec"
+# Các màn được phép, cách nhau bởi dấu cách. Tính cả trang con (/orders/123, /orders/new)
+# và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
+APP_PATHS="/orders /kho-viec"
+# Tên miền của Smilelog, cách nhau bởi dấu cách (khớp cả tên miền con).
+# Để trống thì lấy tên miền của APP_URL.
+APP_HOSTS=""
+
+# --- Chế độ tv ---
 # Trang mở khi bật máy. Smilelog dùng đường dẫn sau dấu #: thiếu # thì máy chủ trả về 404.
 # Thêm ?zone=<mã khu> để TV chỉ chiếu một khu, ví dụ ...#/production-tv?zone=62BD-T2 (62BĐ Tầng 2);
 # không có zone thì chiếu toàn lab.
@@ -12,6 +46,12 @@ EXPECTED_PATH="/production-tv"
 
 # URL chứa chuỗi này được coi là trang đăng nhập: watchdog báo động, không khởi động lại.
 LOGIN_PATTERN="login"
+
+# Cách kiosk vẽ màn hình (Màn TV, Ca & Kho việc). install.sh hỏi chọn mỗi lần chạy tay
+# (Enter = giữ), hoặc: sudo ./install.sh --display x11|wayland
+#   x11     (mặc định): RustDesk xem và điều khiển được màn hình kiosk từ xa.
+#   wayland : cage, khoá chặt nhất, hình mượt; RustDesk không xem được màn hình kiosk.
+DISPLAY_SERVER="x11"
 
 # Độ phân giải xuất ra TV. 1080p giúp Pi chạy mát và mượt hơn 4K; ở 55" nhìn xa không thấy khác.
 # Để trống để dùng độ phân giải mặc định của TV. Đổi xong cần khởi động lại máy.
@@ -35,6 +75,28 @@ SCREEN_DAYS="Mon..Sat"
 
 # Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
 REBOOT_AT="03:30"
+
+# Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
+# Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
+# vào /etc/smilelog-tv.tailscale-key, quyền 600. Không có khoá thì chạy: sudo smilelog-tv remote up
+# rồi mở đường link hiện ra. KHÔNG ghi khoá vào file cấu hình này (ai trên máy cũng đọc được).
+ENABLE_TAILSCALE="yes"
+TAILSCALE_HOSTNAME=""
+
+# RustDesk: xem và điều khiển màn hình từ xa. install.sh tự cài, đặt mật khẩu cố định (lưu ở
+# /etc/smilelog-tv.rustdesk-password, chỉ root đọc) và nâng cấp mỗi đêm.
+# Xem ID và mật khẩu: sudo smilelog-tv rustdesk
+# Lưu ý: RustDesk chỉ điều khiển được ở chế độ Đào tạo (chạy X11). Màn TV, Ca & Kho việc là kiosk
+# Wayland: xem màn hình qua Tailscale + chrome://inspect (README), hoặc đổi tạm sang Đào tạo.
+# RUSTDESK_VERSION trống = bản mới nhất; ghi số (ví dụ "1.5.1") để giữ cố định.
+ENABLE_RUSTDESK="yes"
+RUSTDESK_VERSION=""
+
+# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
+UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
+UPDATE_BRANCH="main"
+AUTO_UPDATE_AT="02:30"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).

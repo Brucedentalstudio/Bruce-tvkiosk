@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Smilelog TV: đổi chế độ",
+  "version": "1.0",
+  "description": "Nút nổi để đổi giữa Màn TV và Danh sách ca & Kho việc ngay trên màn hình.",
+  "background": { "service_worker": "background.js" },
+  "host_permissions": ["http://127.0.0.1:9333/*"],
+  "content_scripts": [
+    { "matches": [], "js": ["content.js"], "run_at": "document_idle" },
+    { "matches": ["<all_urls>"], "js": ["tabs.js"], "run_at": "document_idle" }
+  ]
+}
