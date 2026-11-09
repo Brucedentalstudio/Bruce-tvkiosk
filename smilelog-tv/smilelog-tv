@@ -68,7 +68,7 @@ in_work_hours() {
 }
 
 desired_url() {
-  if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/kho-viec}"; return; fi
+  if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/#/kho-viec}"; return; fi
   if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
 }
 
@@ -78,13 +78,20 @@ in_app_screens() {
   local url=$1 host path app_hosts h p ok=""
   host=$(sed -E 's#^https?://([^/:]+).*#\1#; t; s#.*##' <<<"$url")
   [ -n "$host" ] || return 1
-  app_hosts=${APP_HOSTS:-$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"${APP_URL:-https://smilelog.vn/kho-viec}")}
+  app_hosts=${APP_HOSTS:-$(sed -E 's#^https?://([^/:]+).*#\1#' <<<"${APP_URL:-https://smilelog.vn/#/kho-viec}")}
   for h in $app_hosts; do
     if [ "$host" = "$h" ] || [[ "$host" == *".$h" ]]; then ok=1; fi
   done
   [ -n "$ok" ] || return 1
   [[ "$url" == *"$LOGIN_PATTERN"* ]] && return 0
-  path=$(sed -E 's#^https?://[^/]+##; s#[?\#].*##' <<<"$url")
+  # Smilelog dùng hash router: màn nằm sau dấu # (https://smilelog.vn/#/orders/123?x=1 là /orders/123).
+  # URL không có #/ thì lấy đường dẫn thường.
+  if [[ "$url" == *"#/"* ]]; then
+    path=${url#*#}
+  else
+    path=$(sed -E 's#^https?://[^/]+##; s#\#.*##' <<<"$url")
+  fi
+  path=${path%%\?*}
   for p in ${APP_PATHS:-/orders /kho-viec}; do
     if [ "$path" = "$p" ] || [[ "$path" == "$p/"* ]]; then return 0; fi
   done
@@ -155,7 +162,7 @@ wait_display() {
 # (kiểu bộ cài Debian tạo) được bật sau khi network-online.target đã báo xong.
 wait_network() {
   local url origin end=$((SECONDS + 90))
-  if [ "$MODE" = full ]; then url=${APP_URL:-https://smilelog.vn/kho-viec}; else url=$TV_URL; fi
+  if [ "$MODE" = full ]; then url=${APP_URL:-https://smilelog.vn/#/kho-viec}; else url=$TV_URL; fi
   origin=$(sed -E 's|^(https?://[^/?#]+).*|\1|' <<<"$url")
   until curl -sS -o /dev/null --max-time 3 "$origin/" 2>/dev/null; do
     if [ "$SECONDS" -ge "$end" ]; then

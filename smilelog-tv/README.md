@@ -24,8 +24,8 @@ Calc, File, **Quay về Ca & Kho việc**, **Quay về Màn TV**.
 - Bút trình chiếu không dây (clicker) dùng được ngay: nó gửi phím chuyển trang như bàn phím.
 - Rời chế độ Đào tạo là đóng toàn bộ phiên đang mở: **lưu file trước khi chuyển**.
 
-Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
-ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
+Muốn thêm màn cho chế độ `full` thì thêm đường dẫn (phần sau dấu `#` trên thanh địa chỉ) vào
+`APP_PATHS` trong `/etc/smilelog-tv.conf`, ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
 ## Đổi chế độ ngay trên TV
 

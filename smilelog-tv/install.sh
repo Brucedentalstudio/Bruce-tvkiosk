@@ -49,6 +49,16 @@ if [ -n "$added" ]; then
   printf '\n# Tuỳ chọn mới thêm khi cập nhật (giải thích trong smilelog-tv.conf.example)\n%s' "$added" >>"$CONF"
   echo "    Đã thêm tuỳ chọn mới vào $CONF: $(echo "$added" | cut -d= -f1 | tr '\n' ' ')"
 fi
+# Mặc định cũ thiếu dấu # nên Smilelog trả về trang lỗi. Chỉ sửa đúng giá trị mặc định cũ;
+# giá trị đã sửa tay (ví dụ có ?zone=) giữ nguyên.
+for fix in 'TV_URL|https://smilelog.vn/production-tv|https://smilelog.vn/#/production-tv' \
+  'APP_URL|https://smilelog.vn/kho-viec|https://smilelog.vn/#/kho-viec'; do
+  IFS='|' read -r key old new <<<"$fix"
+  if grep -qxF "$key=\"$old\"" "$CONF"; then
+    sed -i "s|^$key=\"$old\"\$|$key=\"$new\"|" "$CONF"
+    echo "    Đã sửa $key thành $new"
+  fi
+done
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
 install -m 755 "$HERE/smilelog-tv" /usr/local/bin/smilelog-tv

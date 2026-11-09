@@ -26,10 +26,11 @@ TRAINING_USER="daotao"
 KIOSK_PRINTING="no"
 
 # --- Chế độ full ---
-# Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
-APP_URL="https://smilelog.vn/kho-viec"
-# Các màn được phép, cách nhau bởi dấu cách. Tính cả trang con (/orders/123, /orders/new)
-# và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
+# Trang mở khi bật máy: Kho việc. Đổi thành .../#/orders nếu muốn mở Danh sách ca trước.
+# Smilelog dùng đường dẫn sau dấu #: thiếu # thì máy chủ trả về trang lỗi.
+APP_URL="https://smilelog.vn/#/kho-viec"
+# Các màn được phép (phần sau dấu #), cách nhau bởi dấu cách. Tính cả trang con (/orders/123,
+# /orders/new) và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
 APP_PATHS="/orders /kho-viec"
 # Tên miền của Smilelog, cách nhau bởi dấu cách (khớp cả tên miền con).
 # Để trống thì lấy tên miền của APP_URL.
