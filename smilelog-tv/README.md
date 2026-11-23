@@ -11,7 +11,7 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 | Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
 | Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do |
 | Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường | Không áp dụng |
-| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
 | Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị |
 
 **Chế độ Đào tạo** phải bật riêng, vì tải thêm khoảng 1-2 GB (giao diện GNOME, LibreOffice, phông chữ):
@@ -58,7 +58,7 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
 | Việc | Cách |
 |---|---|
-| **Cập nhật** | Mỗi đêm lúc `AUTO_UPDATE_AT` (mặc định 02:30) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
+| **Cập nhật** | Mỗi ngày lúc `AUTO_UPDATE_AT` (mặc định 18:30, trước giờ khởi động lại) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
 | **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
 | **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
 | **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
@@ -101,7 +101,7 @@ nhất là cắm thêm một máy chạy Linux vào HDMI. TV chỉ còn làm vi�
 | **Mini PC cũ chip Intel** (ví dụ Dell OptiPlex 3050 **Micro**, i3/i5 đời 7, RAM 8 GB, SSD) | Ổ SSD bền hơn thẻ nhớ, dư sức, card Intel chạy tốt trên Linux | Phải bật **AC Recovery = Power On** trong BIOS; không có HDMI-CEC |
 | **Raspberry Pi 5 (4 GB)** + nguồn 27W, tản nhiệt có quạt, thẻ nhớ loại chịu ghi liên tục | Máy mới có bảo hành, có điện là tự lên, bật/tắt TV qua HDMI-CEC | Thẻ nhớ kém bền hơn SSD; cần cáp micro-HDMI |
 
-TV để bật liên tục và ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
+TV để bật liên tục và (nếu đặt giờ làm) ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
 được, chọn loại rẻ hơn ở thời điểm mua. Tránh máy có card đồ hoạ rời (ví dụ HP Z2 Mini có Quadro):
 tốn điện và dễ lỗi driver với giao diện kiosk.
 
@@ -155,11 +155,11 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
 | Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
-| Ngoài giờ làm (`WORK_START`–`WORK_END`, `WORK_DAYS`) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
-| Vào giờ làm | Tự quay về Màn TV (trong vòng 1 phút) |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi Lab vắng |
+| Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
-| Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
+| Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ Bruce chọn; màn hình tối khoảng 1 phút) |
 
 ## Lệnh hay dùng
 
@@ -175,6 +175,28 @@ sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)
 ```
+
+### Chuyển máy đang chạy sang 24/7
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf` có sẵn, nên máy đã cài vẫn giữ 07:00 đến 19:30. Để Màn TV chiếu 24/7:
+
+```bash
+sudo sed -i -E 's/^WORK_START=.*/WORK_START=""/; s/^WORK_END=.*/WORK_END=""/' /etc/smilelog-tv.conf
+```
+
+Không cần chạy lại `install.sh`: watchdog chạy mỗi phút và đọc lại file này mỗi lần, nên trong vòng 1 phút TV tự quay về Màn TV.
+
+Để đổi giờ khởi động lại về 19:00 và giờ cập nhật về 18:30 (máy cũ đang để 03:30 và 02:30), sửa file rồi chạy lại `install.sh`, vì hẹn giờ là timer systemd do `install.sh` ghi ra, chỉ sửa file cấu hình thì chưa đổi:
+
+```bash
+sudo sed -i -E 's/^REBOOT_AT=.*/REBOOT_AT="19:00"/; s/^AUTO_UPDATE_AT=.*/AUTO_UPDATE_AT="18:30"/' /etc/smilelog-tv.conf
+sudo smilelog-tv update --force
+systemctl list-timers 'smilelog-tv-reboot.timer' 'smilelog-tv-update.timer'   # kiểm tra: 19:00 và 18:30
+```
+
+Lệnh `update --force` lấy bản mới nhất của nhánh `main` trên GitHub rồi chạy lại `install.sh` để ghi lại các timer. Nếu `install.sh` hỏi "Chọn 1 hoặc 2", bấm Enter để giữ cách vẽ màn hình hiện tại. Kiosk khởi động lại nên màn hình tối khoảng 10-30 giây.
+
+Hoặc chạy `sudo ./install.sh` trong thư mục đã chép lên máy lúc cài.
 
 ## Lưu ý bảo mật
 

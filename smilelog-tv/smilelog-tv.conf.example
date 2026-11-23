@@ -3,7 +3,7 @@
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
 # Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
-#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (TV treo xưởng)
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo xưởng)
 #   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
 #          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
 MODE="tv"
@@ -58,21 +58,24 @@ RESOLUTION="1920x1080"
 # Múi giờ của máy: giờ làm việc, màn chờ và giờ khởi động lại đều tính theo múi này.
 TIMEZONE="Asia/Ho_Chi_Minh"
 
-# Giờ làm việc: trong giờ chiếu Màn TV, ngoài giờ chiếu màn chờ (đồng hồ trôi trên nền đen)
-# để TV không lưu ảnh và không lộ số liệu khi xưởng vắng. Để trống WORK_START để luôn chiếu Màn TV.
+# Giờ làm việc. Mặc định để trống: Màn TV chiếu 24/7, mọi ngày, vì Lab làm việc suốt ngày đêm;
+# TV chỉ tối khi có người tắt TV. Chỉ site muốn màn chờ (đồng hồ trôi trên nền đen, để TV không
+# lưu ảnh và không lộ số liệu khi Lab vắng) ngoài giờ mới đặt cả WORK_START, WORK_END và WORK_DAYS.
 # WORK_DAYS: 1 = thứ 2 ... 7 = chủ nhật. Ca qua đêm thì đặt WORK_START lớn hơn WORK_END.
-WORK_START="07:00"
-WORK_END="19:30"
+# Ví dụ: WORK_START="07:00", WORK_END="19:30", WORK_DAYS="1,2,3,4,5,6".
+WORK_START=""
+WORK_END=""
 WORK_DAYS="1,2,3,4,5,6"
 
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
-# Mặc định để trống: TV luôn bật, ngoài giờ đã có màn chờ.
+# Mặc định để trống: không điều khiển bật/tắt TV; Màn TV chiếu 24/7.
 SCREEN_ON=""
 SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"
 
-# Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
-REBOOT_AT="03:30"
+# Khởi động lại máy mỗi ngày để dọn bộ nhớ. Mặc định 19:00 (giờ Bruce chọn) vì Lab làm việc 24/7:
+# màn hình tối khoảng 1 phút, ca đêm vẫn có Màn TV. Để trống để tắt.
+REBOOT_AT="19:00"
 
 # Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
 # Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
@@ -90,11 +93,12 @@ TAILSCALE_HOSTNAME=""
 ENABLE_RUSTDESK="yes"
 RUSTDESK_VERSION=""
 
-# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật từ xa: mỗi ngày máy lấy bản mới nhất từ GitHub và tự cài lại; màn hình tối 10-30 giây khi có bản mới,
+# nên đặt trước giờ REBOOT_AT để gộp vào lúc khởi động lại.
 # Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
 UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
 UPDATE_BRANCH="main"
-AUTO_UPDATE_AT="02:30"
+AUTO_UPDATE_AT="18:30"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).
