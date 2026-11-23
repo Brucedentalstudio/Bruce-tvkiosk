@@ -101,6 +101,70 @@ class Hotkeys:
             self.trigger(HOTKEYS[code])
 
 
+CONF = os.environ.get("SMILELOG_TV_CONF", "/etc/smilelog-tv.conf")
+CONF_LINE = re.compile(r"""^([A-Z_][A-Z0-9_]*)=(?:"([^"]*)"|'([^']*)'|([^\s#"']*))\s*(?:#.*)?$""")
+HHMM = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+# Mặc định của các tuỳ chọn chống lưu ảnh, dùng khi file cấu hình cũ chưa có dòng đó.
+SETTING_DEFAULTS = {
+    "BURNIN_SHIFT_MIN": "5", "BURNIN_SHIFT_PX": "4",
+    "BURNIN_SAVER_EVERY_MIN": "60", "BURNIN_SAVER_SEC": "60",
+    "DIM_START": "22:00", "DIM_END": "05:00", "DIM_LEVEL": "0.3",
+}
+
+
+def read_conf(path=None):
+    """Đọc các dòng KEY="giá trị" của file cấu hình; dòng sau ghi đè dòng trước, như bash."""
+    values = {}
+    try:
+        with open(path or CONF, encoding="utf-8") as f:
+            for line in f:
+                m = CONF_LINE.match(line.strip())
+                if m:
+                    values[m.group(1)] = next(g for g in m.groups()[1:] if g is not None)
+    except OSError:
+        pass
+    return values
+
+
+def _number(raw, lo, hi, kind=int):
+    """Số trong khoảng [lo, hi]; trống, 0 hoặc sai thì trả 0 (tắt tính năng đó)."""
+    try:
+        n = kind(raw)
+    except (TypeError, ValueError):
+        return 0
+    return n if lo <= n <= hi else 0
+
+
+def _timezone(name):
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(name)
+        return name
+    except Exception:  # tên sai hoặc thiếu dữ liệu múi giờ: trình duyệt dùng giờ của máy
+        return None
+
+
+def settings(conf, mode):
+    """Giá trị đã kiểm tra cho tiện ích trong trình duyệt. Giá trị nào sai thì tính năng đó tắt."""
+    def get(key):
+        return conf.get(key, SETTING_DEFAULTS.get(key, "")).strip()
+
+    dim_start, dim_end = get("DIM_START"), get("DIM_END")
+    dim_on = bool(HHMM.match(dim_start) and HHMM.match(dim_end)) and dim_start != dim_end
+    return {
+        "mode": mode,
+        "switch_button": get("SHOW_SWITCH_BUTTON") != "no",
+        "shift_min": _number(get("BURNIN_SHIFT_MIN"), 1, 120),
+        "shift_px": _number(get("BURNIN_SHIFT_PX"), 1, 20),
+        "saver_every_min": _number(get("BURNIN_SAVER_EVERY_MIN"), 5, 1440),
+        "saver_sec": _number(get("BURNIN_SAVER_SEC"), 5, 600),
+        "dim_start": dim_start if dim_on else "",
+        "dim_end": dim_end if dim_on else "",
+        "dim_level": _number(get("DIM_LEVEL"), 0.05, 0.8, float) if dim_on else 0,
+        "timezone": _timezone(get("TIMEZONE")) if get("TIMEZONE") else None,
+    }
+
+
 def read_token():
     with open(TOKEN_FILE) as f:
         return f.read().strip()
@@ -132,6 +196,8 @@ def make_handler(actions, token, trusted=False):
                 return self.reply(403, {"error": "forbidden"})
             if self.path == "/mode":
                 return self.reply(200, {"mode": actions.mode(), "modes": actions.modes()})
+            if self.path == "/settings":
+                return self.reply(200, settings(read_conf(), actions.mode()))
             self.reply(404, {"error": "not found"})
 
         def do_POST(self):

@@ -5,7 +5,7 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 
 ## Ba chế độ
 
-| | `tv` (mặc định) | `full` | `training` (Đào tạo) |
+| | `tv` | `full` (mặc định, màn chính Kho việc) | `training` (Đào tạo) |
 |---|---|---|---|
 | Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản |
 | Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
@@ -175,7 +175,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 | Tình huống | Xử lý |
 |---|---|
-| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `TV_URL` |
+| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `APP_URL` (Kho việc, chế độ `full`) hoặc `TV_URL` (chế độ `tv`) |
 | Mất mạng ngắn | Smilelog tự hiện "Mất kết nối" và tự tải lại sau 10 phút |
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
@@ -185,6 +185,30 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
 | Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ Bruce chọn; màn hình tối khoảng 1 phút) |
+
+## Màn chính Kho việc và chống lưu ảnh
+
+Máy cài mới mặc định `MODE="full"`: bật lên vào **Kho việc** (`APP_URL`). Màn TV sản xuất vẫn chọn được bằng nút ⇄.
+
+Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv` và `full`):
+
+| Việc | Tuỳ chọn (mặc định) | Tắt |
+|---|---|---|
+| Dời cả trang lên/sang trái vài điểm ảnh, thanh trên và menu dời theo | `BURNIN_SHIFT_MIN="5"` phút, `BURNIN_SHIFT_PX="4"` | `BURNIN_SHIFT_MIN=""` |
+| Màn chờ đồng hồ phủ lên trang rồi về đúng trang cũ, không tải lại. Có người dùng trong 2 phút qua thì hoãn; chạm hoặc gõ phím là tắt ngay | `BURNIN_SAVER_EVERY_MIN="60"`, `BURNIN_SAVER_SEC="60"` | `BURNIN_SAVER_EVERY_MIN=""` |
+| Làm tối ban đêm, trang vẫn bấm được | `DIM_START="22:00"`, `DIM_END="05:00"`, `DIM_LEVEL="0.3"` | `DIM_START=""` |
+
+Sửa các dòng này trong `/etc/smilelog-tv.conf` là đủ: trang đang mở đọc lại trong vòng 1 phút, không cần người tại chỗ.
+
+### Chuyển máy đang chạy sang Kho việc
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf`, nên máy đã cài vẫn giữ `MODE` cũ (thường là `tv`). Vào máy từ xa (Tailscale SSH) rồi chạy:
+
+```bash
+sudo smilelog-tv mode full
+```
+
+Lệnh này ghi `MODE="full"` vào `/etc/smilelog-tv.conf` (giữ sau khi khởi động lại) và mở lại trình duyệt ngay vào Kho việc. Các tuỳ chọn chống lưu ảnh ở trên được thêm vào file cấu hình với giá trị mặc định ở lần cập nhật kế tiếp (`smilelog-tv update` chạy lại `install.sh`).
 
 ## Lệnh hay dùng
 

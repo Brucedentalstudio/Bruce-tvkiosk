@@ -3,7 +3,7 @@
 (() => {
   if (window.top !== window || document.getElementById('smilelog-tv-switch')) return;
 
-  const LABEL = { tv: 'Màn TV', full: 'Danh sách ca & Kho việc', training: 'Đào tạo (Ubuntu, LibreOffice)' };
+  const LABEL = { full: 'Kho việc (màn chính)', tv: 'Màn TV sản xuất', training: 'Đào tạo (Ubuntu, LibreOffice)' };
   const host = document.createElement('div');
   host.id = 'smilelog-tv-switch';
   host.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483647';
@@ -56,7 +56,9 @@
     $('.cur').textContent = LABEL[r.mode] || r.mode;
     const targets = $('.targets');
     targets.textContent = '';
-    for (const m of (r.modes || ['tv', 'full']).filter((x) => x !== r.mode)) {
+    // Kho việc là màn chính: nút "Chuyển sang Kho việc" luôn đứng đầu.
+    const order = (m) => (m === 'full' ? 0 : 1);
+    for (const m of (r.modes || ['full', 'tv']).filter((x) => x !== r.mode).sort((a, b) => order(a) - order(b))) {
       const b = document.createElement('button');
       b.className = 'act main';
       b.textContent = `Chuyển sang ${LABEL[m] || m}`;
@@ -73,5 +75,185 @@
   });
   $('.close').addEventListener('click', close);
 
-  document.documentElement.appendChild(host);
+  // Tiện ích luôn chạy (để chống lưu ảnh); SHOW_SWITCH_BUTTON="no" thì chỉ ẩn nút.
+  send('settings').then((s) => { if (s.switch_button !== false) document.documentElement.appendChild(host); });
+})();
+
+// Chống lưu ảnh cho màn hình sáng 24/7. Giá trị lấy từ /etc/smilelog-tv.conf qua
+// dịch vụ trên máy (đã kiểm tra ở đó), đọc lại mỗi phút; dịch vụ không trả lời thì mọi tính năng tắt.
+(() => {
+  if (window.top !== window || window.smilelogTvBurnin) return;
+  window.smilelogTvBurnin = true;
+  const IDLE_MS = 120000; // có người chạm trong 2 phút qua thì không hiện màn chờ
+  const Z = 2147483646;
+  let cfg = {};
+  let lastInput = Date.now();
+  let lastShift = Date.now();
+  let lastSaver = Date.now();
+  let step = 0;
+  let saver = null;
+  let saverUntil = 0;
+  let dim = null;
+  let lastXY = '';
+  let fmt = null;
+  const touched = new Map(); // phần tử đã dời -> style gốc, để trả lại khi tắt
+
+  const send = (action) => new Promise((ok) => {
+    try {
+      chrome.runtime.sendMessage({ action }, (r) => ok((!chrome.runtime.lastError && r) || {}));
+    } catch (e) {
+      ok({});
+    }
+  });
+  const on = () => !!cfg.mode && cfg.mode !== 'training';
+  const idle = () => Date.now() - lastInput >= IDLE_MS;
+
+  // 1. Dời cả trang vài điểm ảnh. Không dùng transform trên html/body: phần tử fixed (thanh trên, menu)
+  // sẽ trôi theo trang khi cuộn. Phần cuộn theo trang dời bằng position:relative, phần tử fixed dời bằng
+  // thuộc tính translate (cộng thêm vào transform sẵn có). Chỉ dời lên và sang trái: không sinh thanh cuộn.
+  const remember = (el, props) => {
+    if (!touched.has(el)) touched.set(el, Object.fromEntries(props.map((p) => [p, el.style[p]])));
+  };
+  function shift(dx, dy) {
+    if (!document.body) return;
+    for (const el of document.body.children) {
+      const { position: pos, display } = getComputedStyle(el);
+      if (display === 'none' || !(pos === 'static' || (pos === 'relative' && touched.has(el)))) continue;
+      remember(el, ['position', 'left', 'top']);
+      Object.assign(el.style, { position: 'relative', left: `${dx}px`, top: `${dy}px` });
+    }
+    for (const el of document.body.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' || (cs.translate !== 'none' && !touched.has(el))) continue;
+      remember(el, ['translate']);
+      el.style.translate = `${dx}px ${dy}px`;
+    }
+  }
+  function unshift() {
+    for (const [el, orig] of touched) Object.assign(el.style, orig);
+    touched.clear();
+  }
+
+  // 2. Màn chờ đồng hồ (giống screensaver.html) phủ lên trang, không tải lại trang nên Kho việc giữ nguyên.
+  function showSaver() {
+    saver = document.createElement('div');
+    saver.id = 'smilelog-tv-saver';
+    saver.style.cssText = `position:fixed;inset:0;z-index:${Z};background:#000;cursor:none`;
+    const root = saver.attachShadow({ mode: 'closed' });
+    root.innerHTML = `<style>
+        #b { position: absolute; text-align: center; color: #7a7a7a; transition: opacity 1.5s ease;
+          font-family: system-ui, "DejaVu Sans", sans-serif; }
+        #t { font-size: 14vw; font-weight: 200; line-height: 1; }
+        #d { font-size: 2.6vw; margin-top: 1.2vw; font-weight: 300; }
+      </style><div id="b"><div id="t"></div><div id="d"></div></div>`;
+    const b = root.getElementById('b');
+    const draw = () => {
+      const now = new Date();
+      root.getElementById('t').textContent = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: cfg.timezone || undefined });
+      const d = now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric', timeZone: cfg.timezone || undefined });
+      root.getElementById('d').textContent = d.charAt(0).toUpperCase() + d.slice(1);
+      b.style.left = `${Math.round(Math.random() * Math.max(0, innerWidth - b.offsetWidth))}px`;
+      b.style.top = `${Math.round(Math.random() * Math.max(0, innerHeight - b.offsetHeight))}px`;
+      saver.drawn = Date.now();
+    };
+    saver.draw = draw;
+    // Chạm vào màn chờ chỉ để tắt nó, không bấm xuyên xuống nút bên dưới: giữ lớp phủ tới hết cú bấm.
+    saver.addEventListener('click', () => removeSaver());
+    document.documentElement.appendChild(saver);
+    draw();
+    saverUntil = Date.now() + cfg.saver_sec * 1000;
+    lastSaver = Date.now();
+  }
+  function removeSaver() {
+    if (saver) saver.remove();
+    saver = null;
+  }
+  function hideSaver(byPointer) {
+    if (!saver) return;
+    if (!byPointer) return removeSaver();
+    const s = saver;
+    s.style.opacity = '0';
+    setTimeout(() => { s.remove(); if (saver === s) saver = null; }, 1500);
+  }
+
+  // Có người dùng: chuột di chuyển thật, bấm, chạm, phím, cuộn. Chuột đứng yên mà trang đổi thì không tính.
+  const onInput = (e) => {
+    if (e.type === 'pointermove') {
+      const xy = `${e.screenX},${e.screenY}`;
+      const first = !lastXY;
+      if (xy === lastXY) return;
+      lastXY = xy;
+      if (first) return;
+    }
+    lastInput = Date.now();
+    if (saver && saver.style.opacity !== '0') {
+      if (e.type === 'keydown') { e.preventDefault(); e.stopImmediatePropagation(); }
+      hideSaver(e.type !== 'keydown');
+    }
+  };
+  addEventListener('keydown', onInput, true);
+  for (const t of ['pointerdown', 'pointermove', 'touchstart', 'wheel']) addEventListener(t, onInput, { capture: true, passive: true });
+
+  // 3. Làm tối ban đêm: lớp đen mờ không nhận bấm, trang vẫn đọc và bấm được.
+  function hhmm() {
+    try {
+      if (!fmt || fmt.tz !== cfg.timezone) {
+        fmt = new Intl.DateTimeFormat('en-GB', { timeZone: cfg.timezone || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+        fmt.tz = cfg.timezone;
+      }
+      return fmt.format(new Date());
+    } catch (e) {
+      fmt = null;
+      return new Date().toTimeString().slice(0, 5);
+    }
+  }
+  function nightNow() {
+    const s = cfg.dim_start;
+    const e = cfg.dim_end;
+    if (!s || !e || !cfg.dim_level) return false;
+    const n = hhmm();
+    return s < e ? n >= s && n < e : n >= s || n < e; // qua đêm khi giờ bắt đầu lớn hơn giờ kết thúc
+  }
+  function setDim(want) {
+    if (want && !dim) {
+      dim = document.createElement('div');
+      dim.id = 'smilelog-tv-dim';
+      document.documentElement.appendChild(dim);
+    }
+    if (want) dim.style.cssText = `position:fixed;inset:0;z-index:${Z - 1};background:#000;opacity:${cfg.dim_level};pointer-events:none`;
+    if (!want && dim) { dim.remove(); dim = null; }
+  }
+
+  function tick() {
+    const now = Date.now();
+    if (!on()) {
+      unshift();
+      removeSaver();
+      setDim(false);
+      return;
+    }
+    if (cfg.shift_min && cfg.shift_px) {
+      if (now - lastShift >= cfg.shift_min * 60000) {
+        const p = cfg.shift_px;
+        const h = Math.round(p / 2);
+        const at = [[0, 0], [-h, 0], [-p, 0], [-p, -h], [-p, -p], [-h, -p], [0, -p], [0, -h]][++step % 8];
+        shift(at[0], at[1]);
+        lastShift = now;
+      }
+    } else if (touched.size) {
+      unshift();
+    }
+    if (saver) {
+      if (now >= saverUntil || !cfg.saver_sec) hideSaver(false);
+      else if (now - saver.drawn >= 15000) saver.draw();
+    } else if (cfg.saver_every_min && cfg.saver_sec && now - lastSaver >= cfg.saver_every_min * 60000 && idle()) {
+      showSaver(); // vừa có người dùng thì hoãn, hiện ngay khi rảnh 2 phút
+    }
+    setDim(nightNow());
+  }
+
+  const load = () => send('settings').then((s) => { cfg = s && !s.error ? s : {}; tick(); });
+  load();
+  setInterval(load, 60000);
+  setInterval(tick, 1000);
 })();

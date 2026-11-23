@@ -154,9 +154,10 @@ cmd_browser() {
         log "Không đặt được độ phân giải $RESOLUTION trên $output"
     fi
   fi
-  # Nút nổi đổi chế độ (tiện ích Chromium). SHOW_SWITCH_BUTTON="no" để ẩn; phím tắt vẫn dùng được.
+  # Tiện ích Chromium: nút nổi đổi chế độ, chống lưu ảnh màn hình. Luôn nạp;
+  # SHOW_SWITCH_BUTTON="no" chỉ ẩn nút nổi (tiện ích tự đọc qua smilelog-tv-control), phím tắt vẫn dùng được.
   local ext=()
-  if [ "${SHOW_SWITCH_BUTTON:-yes}" != no ] && [ -f "$EXTENSION/manifest.json" ]; then
+  if [ -f "$EXTENSION/manifest.json" ]; then
     ext=(--load-extension="$EXTENSION")
   fi
   # KIOSK_PRINTING="yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn.
