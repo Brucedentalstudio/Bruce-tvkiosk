@@ -100,6 +100,11 @@ UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
 UPDATE_BRANCH="main"
 AUTO_UPDATE_AT="18:30"
 
+# Kiểm tra bản mới mỗi AUTO_UPDATE_CHECK_MIN phút: nhánh UPDATE_BRANCH có commit mới thì cài ngay, không
+# đợi lượt AUTO_UPDATE_AT (màn hình tối 10-30 giây khi kiosk mở lại). Không có gì mới thì không làm gì.
+# Để trống để tắt.
+AUTO_UPDATE_CHECK_MIN="10"
+
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).
 ALERT_WEBHOOK=""
