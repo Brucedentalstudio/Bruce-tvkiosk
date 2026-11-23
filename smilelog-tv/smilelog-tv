@@ -3,7 +3,7 @@
 #   smilelog-tv browser      mở Chromium toàn màn hình (systemd gọi, không chạy tay)
 #   smilelog-tv x11-session  phiên X11 của kiosk: tắt tiết kiệm màn hình, ẩn chuột, mở Chromium (xinit gọi)
 #   smilelog-tv watchdog     kiểm tra trình duyệt, tự sửa hoặc báo động (timer gọi mỗi phút)
-#   smilelog-tv mode [tv|full|training|toggle]  xem hoặc đổi chế độ: Màn TV, Ca & Kho việc, Đào tạo
+#   smilelog-tv mode [tv|full|training|media|toggle]  xem hoặc đổi chế độ: Màn TV, Ca & Kho việc, Đào tạo, Trình chiếu
 #   smilelog-tv printer [list|add TÊN IP|default TÊN|test]  máy in cho phiếu, QR
 #   smilelog-tv screen on|off  bật/tắt TV qua HDMI-CEC
 #   smilelog-tv status       xem tình trạng và log gần nhất
@@ -28,6 +28,11 @@ EXTENSION=${SMILELOG_TV_EXTENSION:-/usr/local/share/smilelog-tv/extension}
 MODE=${MODE:-tv}
 # wayland: kiosk chạy trong cage. x11: kiosk chạy trên Xorg, để RustDesk xem và điều khiển được.
 DISPLAY_SERVER=${DISPLAY_SERVER:-x11}
+# Chế độ Trình chiếu (media): máy chủ smilelog-tv-media do install.sh cài khi ENABLE_MEDIA="yes".
+MEDIA_PORT=${MEDIA_PORT:-9334}
+MEDIA_URL="http://127.0.0.1:${MEDIA_PORT}/"
+MEDIA_DIR=${MEDIA_DIR:-/var/lib/smilelog-tv/media}
+MEDIA_BIN=${SMILELOG_TV_MEDIA_BIN:-/usr/local/bin/smilelog-tv-media}
 
 log() { logger -t smilelog-tv -- "$*" 2>/dev/null || true; echo "$*" >&2; }
 
@@ -68,6 +73,7 @@ in_work_hours() {
 
 desired_url() {
   if [ "$MODE" = full ]; then echo "${APP_URL:-https://smilelog.vn/kho-viec}"; return; fi
+  if [ "$MODE" = media ]; then echo "$MEDIA_URL"; return; fi
   if in_work_hours; then echo "$TV_URL"; else echo "$SAVER_URL?until=${WORK_START:-}"; fi
 }
 
@@ -113,9 +119,19 @@ training_available() {
   [ "${ENABLE_TRAINING:-no}" = yes ] && id "${TRAINING_USER:-daotao}" >/dev/null 2>&1 && dm_unit >/dev/null
 }
 
-available_modes() {
-  if training_available; then echo "tv full training"; else echo "tv full"; fi
+media_available() {
+  [ "${ENABLE_MEDIA:-no}" = yes ] && [ -x "$MEDIA_BIN" ]
 }
+
+available_modes() {
+  local m="tv full"
+  if training_available; then m="$m training"; fi
+  if media_available; then m="$m media"; fi
+  echo "$m"
+}
+
+# MODE=media mà Trình chiếu đã tắt (ENABLE_MEDIA="no" hoặc mất máy chủ): chạy tạm như Màn TV, không lỗi.
+if [ "$MODE" = media ] && ! media_available; then MODE=tv; fi
 
 # Bật đúng thứ cần cho chế độ hiện tại, tắt thứ kia. Trạng thái enable giữ qua lần khởi động lại.
 apply_mode() {
@@ -207,6 +223,15 @@ cmd_watchdog() {
     return 0
   fi
   rm -f "$STATE/fail-devtools"
+  # Chế độ Trình chiếu: người dùng tự điều khiển như Đào tạo, không màn chờ, không đăng nhập, không ép về trang nào.
+  # Chỉ giữ trình duyệt sống (ở trên) và máy chủ Trình chiếu trả lời; không trả lời thì khởi động lại một lần.
+  if [ "$MODE" = media ]; then
+    if ! curl -fsS --max-time 5 -o /dev/null "${MEDIA_URL}api/list" 2>/dev/null; then
+      log "Máy chủ Trình chiếu không trả lời: khởi động lại smilelog-tv-media"
+      systemctl restart smilelog-tv-media.service || log "Không khởi động lại được smilelog-tv-media"
+    fi
+    return 0
+  fi
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
 
   # Chế độ full: tab mở thêm (ví dụ "Xem 3D") không tính là lạc ra ngoài, miễn còn một tab ở đúng màn.
@@ -269,7 +294,7 @@ cmd_mode() {
     "") echo "$MODE"; return ;;
     --available) echo "$modes"; return ;;
     toggle)
-      # Vòng: tv -> full -> training (nếu đã cài) -> tv
+      # Vòng: tv -> full -> training -> media -> tv (bỏ qua chế độ chưa cài)
       for m in $modes $modes; do
         if [ -n "$found" ]; then next=$m; break; fi
         [ "$m" = "$MODE" ] && found=1
@@ -277,19 +302,25 @@ cmd_mode() {
       new=${next:-tv}
       ;;
     tv | full) ;;
+    media)
+      if ! media_available; then
+        echo "Chưa có chế độ Trình chiếu: đặt ENABLE_MEDIA=\"yes\" trong $CONF rồi chạy lại install.sh" >&2
+        exit 1
+      fi
+      ;;
     training)
       if ! training_available; then
         echo "Chưa cài chế độ Đào tạo: đặt ENABLE_TRAINING=\"yes\" trong $CONF rồi chạy lại install.sh" >&2
         exit 1
       fi
       ;;
-    *) echo "Dùng: smilelog-tv mode [tv|full|training|toggle]" >&2; exit 2 ;;
+    *) echo "Dùng: smilelog-tv mode [tv|full|training|media|toggle]" >&2; exit 2 ;;
   esac
   set -- "$new"
   if grep -q '^MODE=' "$CONF"; then
     sed -i "s/^MODE=.*/MODE=\"$1\"/" "$CONF"
   else
-    printf '\n# Chế độ chạy: tv, full hoặc training (đặt bằng: smilelog-tv mode)\nMODE="%s"\n' "$1" >>"$CONF"
+    printf '\n# Chế độ chạy: tv, full, training hoặc media (đặt bằng: smilelog-tv mode)\nMODE="%s"\n' "$1" >>"$CONF"
   fi
   MODE=$1
   apply_mode
@@ -499,6 +530,27 @@ cmd_doctor() {
   else
     report CHÚ_Ý "Chế độ Đào tạo chưa bật (ENABLE_TRAINING)"
   fi
+  if [ "${ENABLE_MEDIA:-no}" = yes ]; then
+    local ds
+    systemctl is-active --quiet smilelog-tv-media.service && report OK "Dịch vụ Trình chiếu đang chạy" || report LỖI "Dịch vụ Trình chiếu (smilelog-tv-media) không chạy"
+    curl -fsS --max-time 5 -o /dev/null "${MEDIA_URL}api/list" 2>/dev/null && report OK "Trình chiếu trả lời ở cổng $MEDIA_PORT" ||
+      report LỖI "Trình chiếu không trả lời ở cổng $MEDIA_PORT"
+    command -v libreoffice >/dev/null && report OK "LibreOffice có: mở được PowerPoint" || report CHÚ_Ý "Thiếu LibreOffice: không mở được PowerPoint"
+    [ -d "$MEDIA_DIR/local" ] && report OK "Thư mục nội dung: $MEDIA_DIR/local" || report LỖI "Thiếu thư mục $MEDIA_DIR/local"
+    [ -f "$MEDIA_DIR/slides.txt" ] && report OK "Có danh sách trình chiếu (slides.txt)" || report CHÚ_Ý "Chưa có slides.txt (chưa chọn nội dung trình chiếu)"
+    if [ -f "$MEDIA_DIR/drive-sync.json" ]; then
+      ds=$(jq -r 'if .ok then "OK" else "LỖI" end + "\t" + (.at // "không rõ") + "\t" + (.message // "")' "$MEDIA_DIR/drive-sync.json" 2>/dev/null) || ds=""
+      case "$ds" in
+        OK$'\t'*) report OK "Đồng bộ Google Drive lúc $(cut -f2 <<<"$ds")" ;;
+        LỖI$'\t'*) report LỖI "Đồng bộ Google Drive lỗi lúc $(cut -f2 <<<"$ds"): $(cut -f3 <<<"$ds")" ;;
+        *) report CHÚ_Ý "Không đọc được $MEDIA_DIR/drive-sync.json" ;;
+      esac
+    else
+      report CHÚ_Ý "Chưa bật đồng bộ Google Drive"
+    fi
+  else
+    report OK "Trình chiếu: tắt"
+  fi
   if ! command -v tailscale >/dev/null; then
     report CHÚ_Ý "Chưa cài Tailscale: chưa vào máy từ xa được"
   elif tailscale status >/dev/null 2>&1; then
@@ -535,6 +587,8 @@ cmd_status() {
   echo
   if [ "$MODE" = training ]; then
     echo "Chế độ: training (Đào tạo, giao diện Ubuntu)"
+  elif [ "$MODE" = media ]; then
+    echo "Chế độ: media (Trình chiếu: $MEDIA_URL)"
   elif [ "$MODE" = full ]; then
     echo "Chế độ: full (Danh sách ca + Kho việc: ${APP_PATHS:-/orders /kho-viec})"
   elif in_work_hours; then
