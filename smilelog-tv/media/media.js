@@ -6,6 +6,7 @@
   var home = $('home'), groupsEl = $('groups'), banner = $('banner');
   var player = $('player'), stage = $('pStage'), ctrl = $('pCtrl'), pTitle = $('pTitle'), pAuto = $('pAuto');
 
+  var pHint = $('pHint');
   var data = null, lastJson = '', pollTimer = null, inFlight = false;
   var cur = null; // open player state
   var openToken = 0;
@@ -49,7 +50,7 @@
       (rowsHtml || '<div class="empty">' + esc(emptyText) + '</div>') + '</div>';
   }
   function render() {
-    var d = data, html = '', items = {};
+    var d = data, html = '', items = {}, si = 0;
     d.sources.forEach(function (s) {
       var rs = (s.items || []).map(function (it) { items[it.id] = it; return rowHtml(it, d.pptx); }).join('');
       var sub = '', empty = 'Chưa có file';
@@ -63,7 +64,7 @@
       html += groupHtml(s.label, sub, rs, empty);
     });
     var srows = (d.slides || []).map(function (sl) {
-      var it = { id: 'slides/' + sl.url, name: sl.name, kind: 'slides', url: sl.url };
+      var it = { id: 'slides/' + (si++), name: sl.name, kind: 'slides', url: sl.url };
       items[it.id] = it;
       return rowHtml(it, true);
     }).join('');
@@ -75,7 +76,7 @@
     groupsEl.innerHTML = html;
     if (keepId) {
       var r = rowById(keepId);
-      if (r) r.focus({ preventScroll: true });
+      if (r) r.focus({ preventScroll: true }); else focusFirst();
     }
   }
   function rows() { return Array.prototype.slice.call(groupsEl.querySelectorAll('.row')); }
@@ -95,9 +96,12 @@
       .then(function (txt) {
         var first = data === null;
         banner.hidden = true;
-        if (txt !== lastJson) {
-          lastJson = txt;
-          data = JSON.parse(txt);
+        var o = JSON.parse(txt);
+        delete o.generated;
+        var cmp = JSON.stringify(o);
+        if (cmp !== lastJson) {
+          lastJson = cmp;
+          data = o;
           render();
         }
         if (first) focusFirst();
@@ -176,7 +180,9 @@
     else if (k === 'pdf') openFrame(fileUrl('/file/', it.id) + '#toolbar=0&view=Fit');
     else if (k === 'pptx') openPptx(it, token);
     else if (k === 'slides') openFrame(it.url, true);
-    if (k !== 'pdf' && k !== 'pptx' && k !== 'slides') player.focus();
+    var inFrame = k === 'pdf' || k === 'pptx' || k === 'slides';
+    pHint.textContent = inFrame ? 'Bấm Quay lại để về danh sách · ⇄ để về màn hình chính' : 'Esc để quay lại · ⇄ để về màn hình chính';
+    if (!inFrame) player.focus();
   }
 
   function setMsg(text) { stage.innerHTML = '<div class="msg">' + esc(text) + '</div>'; }
