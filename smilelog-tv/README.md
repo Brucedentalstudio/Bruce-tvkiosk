@@ -159,7 +159,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
-| Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
+| Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ giao ca; màn hình tối khoảng 1 phút) |
 
 ## Lệnh hay dùng
 
@@ -185,6 +185,16 @@ sudo sed -i -E 's/^WORK_START=.*/WORK_START=""/; s/^WORK_END=.*/WORK_END=""/' /e
 ```
 
 Không cần chạy lại `install.sh`: watchdog chạy mỗi phút và đọc lại file này mỗi lần, nên trong vòng 1 phút TV tự quay về Màn TV.
+
+Để đổi giờ khởi động lại về 19:00 (máy cũ đang để 03:30), sửa file rồi chạy lại `install.sh`, vì hẹn giờ khởi động lại là timer systemd do `install.sh` ghi ra, chỉ sửa file cấu hình thì chưa đổi:
+
+```bash
+sudo sed -i -E 's/^REBOOT_AT=.*/REBOOT_AT="19:00"/' /etc/smilelog-tv.conf
+sudo smilelog-tv update --force   # lấy bản mới từ GitHub rồi chạy lại install.sh, ghi lại các timer
+systemctl list-timers smilelog-tv-reboot.timer   # kiểm tra: giờ kế tiếp phải là 19:00
+```
+
+Hoặc chạy `sudo ./install.sh` trong thư mục đã chép lên máy lúc cài.
 
 ## Lưu ý bảo mật
 

@@ -73,8 +73,9 @@ SCREEN_ON=""
 SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"
 
-# Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
-REBOOT_AT="03:30"
+# Khởi động lại máy mỗi ngày để dọn bộ nhớ. Mặc định 19:00 vì Lab làm việc 24/7: giờ giao ca,
+# màn hình tối khoảng 1 phút, ca đêm vẫn có Màn TV. Để trống để tắt.
+REBOOT_AT="19:00"
 
 # Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
 # Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
