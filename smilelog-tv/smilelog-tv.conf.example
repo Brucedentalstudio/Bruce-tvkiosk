@@ -29,6 +29,13 @@ ENABLE_MEDIA="no"
 # Thư mục file trên máy: local/ (nạp qua mạng bằng scp hoặc rsync), drive/ (file có sẵn từ Google Drive),
 # slides.txt (link Google Slides, mỗi dòng "Tên | link").
 MEDIA_DIR="/var/lib/smilelog-tv/media"
+# Đồng bộ Google Drive về drive/ (một chiều: file xoá trên Drive cũng xoá khỏi TV). Để trống là tắt.
+# ID thư mục: phần sau /folders/ trong đường link thư mục Google Drive. Chia sẻ thư mục đó cho email của
+# service account với quyền Người xem. Khoá JSON KHÔNG ghi ở đây: để ở /etc/smilelog-tv.drive-sa.json
+# (chmod 600, chủ root), xem README.
+MEDIA_DRIVE_FOLDER_ID=""
+# Số phút giữa hai lần đồng bộ.
+MEDIA_DRIVE_SYNC_MIN="15"
 # Nơi USB được gắn khi cắm vào (khớp quy tắc USB của install.sh).
 MEDIA_USB_DIR="/media/usb"
 # Cổng của dịch vụ Trình chiếu, chỉ nghe trong máy (127.0.0.1).

@@ -10,6 +10,9 @@ for unit in /etc/systemd/system/smilelog-tv*.timer /etc/systemd/system/smilelog-
   systemctl disable --now "$(basename "$unit")" 2>/dev/null || true
   rm -f "$unit"
 done
+# Cả hai unit smilelog-tv-drive-sync.* đã nằm trong vòng lặp trên; gỡ thêm drop-in thứ tự khởi động của Trình chiếu.
+rm -f /etc/systemd/system/smilelog-tv.service.d/media.conf
+rmdir /etc/systemd/system/smilelog-tv.service.d 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable getty@tty1.service 2>/dev/null || true
 rm -f /usr/local/bin/smilelog-tv /usr/local/bin/smilelog-tv-control /usr/local/bin/smilelog-tv-desktop
@@ -44,7 +47,7 @@ if [ "${1:-}" = --purge ]; then
     *) echo "Bỏ qua xoá MEDIA_DIR ('$MEDIA_DIR'): đường dẫn không an toàn" >&2 ;;
   esac
   userdel --remove smilelog-tv 2>/dev/null || true
-  rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key /etc/smilelog-tv.rustdesk-password
+  rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key /etc/smilelog-tv.rustdesk-password /etc/smilelog-tv.drive-sa.json
   echo "Tailscale, RustDesk vẫn giữ để còn vào máy từ xa; gỡ hẳn: sudo apt-get purge tailscale rustdesk"
   userdel --remove daotao 2>/dev/null || true
   echo "Đã gỡ hẳn, kể cả cấu hình và phiên đăng nhập."

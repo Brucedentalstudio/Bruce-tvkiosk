@@ -209,6 +209,15 @@ EOF
   dconf update
 fi
 
+# Gỡ timer và dịch vụ đồng bộ Google Drive nếu có (giữ file trong drive/ và khoá).
+drive_sync_remove() {
+  if [ -e "$UNITS/smilelog-tv-drive-sync.timer" ] || [ -e "$UNITS/smilelog-tv-drive-sync.service" ]; then
+    systemctl disable --now smilelog-tv-drive-sync.timer 2>/dev/null || true
+    rm -f "$UNITS/smilelog-tv-drive-sync.timer" "$UNITS/smilelog-tv-drive-sync.service"
+    systemctl daemon-reload
+  fi
+}
+
 if [ "${ENABLE_MEDIA:-no}" = yes ]; then
   echo "==> Chế độ Trình chiếu (slide, ảnh, video, âm thanh)"
   MBIN=/usr/local/bin/smilelog-tv-media
@@ -259,8 +268,52 @@ EOF
     systemctl daemon-reload
     systemctl enable smilelog-tv-media.service
     systemctl restart smilelog-tv-media.service
+    # Kiosk chờ Trình chiếu lên trước (drop-in, không sửa file unit của kiosk).
+    install -d -m 755 "$UNITS/smilelog-tv.service.d"
+    printf '[Unit]\nWants=smilelog-tv-media.service\nAfter=smilelog-tv-media.service\n' >"$UNITS/smilelog-tv.service.d/media.conf"
+    if [ -n "${MEDIA_DRIVE_FOLDER_ID:-}" ]; then
+      echo "==> Đồng bộ Google Drive (rclone)"
+      command -v rclone >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends rclone ||
+        echo "    Không cài được rclone: chưa đồng bộ được Google Drive"
+      MSYNC=${MEDIA_DRIVE_SYNC_MIN:-15}
+      case "$MSYNC" in "" | *[!0-9]* | 0) MSYNC=15 ;; esac
+      # Tài khoản kiosk ghi drive-sync.json vào MEDIA_DIR.
+      chown "$KIOSK_USER:$KIOSK_USER" "$MDIR"
+      cat >"$UNITS/smilelog-tv-drive-sync.service" <<EOF
+[Unit]
+Description=Smilelog Màn TV: đồng bộ Google Drive cho Trình chiếu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=$KIOSK_USER
+LoadCredential=drive-sa:/etc/smilelog-tv.drive-sa.json
+ExecStart=/usr/local/bin/smilelog-tv drive-sync
+EOF
+      cat >"$UNITS/smilelog-tv-drive-sync.timer" <<EOF
+[Unit]
+Description=Smilelog Màn TV: đồng bộ Google Drive định kỳ
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=${MSYNC}min
+
+[Install]
+WantedBy=timers.target
+EOF
+      systemctl daemon-reload
+      systemctl enable --now smilelog-tv-drive-sync.timer
+    else
+      drive_sync_remove
+    fi
   fi
 else
+  drive_sync_remove
+  if [ -e "$UNITS/smilelog-tv.service.d/media.conf" ]; then
+    rm -f "$UNITS/smilelog-tv.service.d/media.conf"
+    rmdir "$UNITS/smilelog-tv.service.d" 2>/dev/null || true
+  fi
   # Không bật Trình chiếu: gỡ dịch vụ và file cài (file của người dùng trong MEDIA_DIR vẫn giữ). Không gỡ LibreOffice.
   if [ -e "$UNITS/smilelog-tv-media.service" ]; then
     systemctl disable --now smilelog-tv-media.service 2>/dev/null || true

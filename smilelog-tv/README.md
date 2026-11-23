@@ -38,12 +38,35 @@ cài LibreOffice rồi thì không tải thêm. Không dùng giao diện Ubuntu.
 - USB: cắm vào là file hiện trên màn Trình chiếu sau vài giây.
 - Google Slides: ghi mỗi dòng `Tên | link` vào `/var/lib/smilelog-tv/media/slides.txt`. Link phải chia sẻ
   ở chế độ "Bất kỳ ai có đường liên kết".
-- Google Drive: thư mục `drive/` (`/var/lib/smilelog-tv/media/drive`) hiện file có sẵn trong đó.
+- Google Drive: thư mục `drive/` (`/var/lib/smilelog-tv/media/drive`) hiện file đồng bộ từ Drive, xem mục "Đồng bộ Google Drive" bên dưới.
 - Điều khiển: ảnh, video, âm thanh: **Esc** về danh sách file. PDF, PowerPoint, Google Slides: bút
   trình chiếu (clicker) và phím mũi tên, Page Up, Page Down chuyển trang; quay lại bằng nút
   **Quay lại** trên màn hình (hoặc nút nổi **⇄** về màn hình chính).
 - Tắt `ENABLE_MEDIA` rồi chạy lại `sudo ./install.sh` thì gỡ dịch vụ Trình chiếu; file của bạn trong
   `/var/lib/smilelog-tv/media` vẫn giữ.
+
+#### Đồng bộ Google Drive
+
+Cài một lần trên Google, rồi mỗi TV chỉ cần khoá và ID thư mục:
+
+1. Vào Google Cloud Console, tạo project.
+2. Bật Google Drive API.
+3. Tạo service account (không cần cấp vai trò).
+4. Tạo khoá JSON, tải về máy quản lý.
+5. Mở thư mục Google Drive, Chia sẻ cho email của service account (dạng `...@...iam.gserviceaccount.com`) với quyền **Người xem**.
+6. Lấy ID thư mục từ đường link (phần sau `/folders/`), đặt `MEDIA_DRIVE_FOLDER_ID` trong `/etc/smilelog-tv.conf`.
+7. Trên từng TV: `sudo install -m 600 /dev/stdin /etc/smilelog-tv.drive-sa.json` (dán nội dung khoá, Enter, Ctrl+D),
+   hoặc chép file qua Tailscale rồi `sudo install -m 600 drive-sa.json /etc/smilelog-tv.drive-sa.json` và xoá bản chép.
+   Sau đó chạy `sudo ./install.sh`.
+
+- Không dán khoá vào chat, không ghi vào `/etc/smilelog-tv.conf`, không đưa lên GitHub.
+- Đồng bộ mỗi `MEDIA_DRIVE_SYNC_MIN` phút (mặc định 15), một chiều: file xoá trên Drive cũng xoá khỏi TV.
+- Google Slides được tải về dạng `.pptx`.
+- Xem kết quả: `sudo smilelog-tv doctor`. Đồng bộ ngay: `sudo smilelog-tv drive-sync`.
+- Để trống `MEDIA_DRIVE_FOLDER_ID` hoặc tắt `ENABLE_MEDIA` rồi chạy lại `sudo ./install.sh` thì gỡ timer đồng bộ
+  (file trong `drive/` và khoá vẫn giữ).
+- Kiểm trên máy thật (chưa kiểm chứng): remote rclone dựng bằng biến môi trường, thư mục chỉ chia sẻ cho service
+  account (Người xem) liệt kê được không cần `--drive-shared-with-me`, và rclone không báo lỗi khi thiếu file cấu hình.
 
 Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
 ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
