@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+"""smilelog-tv-media: máy chủ nội dung cho chế độ Trình chiếu.
+
+Chỉ nghe 127.0.0.1, chỉ GET và HEAD. Liệt kê và phát ảnh, video, âm thanh, PDF từ USB, Google Drive
+(đã đồng bộ về máy) và thư mục trên máy; đổi PowerPoint sang PDF bằng LibreOffice; đọc danh sách Google Slides
+từ slides.txt. Cấu hình lấy từ /etc/smilelog-tv.conf (dòng KEY="value").
+Chạy bằng systemd (smilelog-tv-media.service).
+"""
+import argparse
+import hashlib
+import json
+import mimetypes
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlsplit
+
+CONF = "/etc/smilelog-tv.conf"
+KINDS = {}
+for _kind, _exts in {
+    "image": "jpg jpeg png gif webp",
+    "video": "mp4 webm mkv mov m4v",
+    "audio": "mp3 m4a aac ogg oga wav flac opus",
+    "pdf": "pdf",
+    "pptx": "pptx",
+}.items():
+    for _e in _exts.split():
+        KINDS[_e] = _kind
+MIME = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp",
+    "mp4": "video/mp4", "webm": "video/webm", "mkv": "video/x-matroska", "mov": "video/quicktime",
+    "m4v": "video/x-m4v", "mp3": "audio/mpeg", "m4a": "audio/mp4", "aac": "audio/aac", "ogg": "audio/ogg",
+    "oga": "audio/ogg", "wav": "audio/wav", "flac": "audio/flac", "opus": "audio/ogg", "pdf": "application/pdf",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "html": "text/html; charset=utf-8", "css": "text/css; charset=utf-8",
+    "js": "text/javascript; charset=utf-8",
+}
+SOURCES = (("usb", "USB"), ("drive", "Google Drive"), ("local", "Thư mục trên máy"))
+MAX_DEPTH, MAX_ITEMS, CHUNK = 3, 500, 256 * 1024
+SLIDES_RE = re.compile(r"^https://docs\.google\.com/presentation/d/([A-Za-z0-9_-]+)")
+STATIC_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+ERR_NO_LO = "Máy chưa cài LibreOffice, không mở được PowerPoint."
+ERR_CONVERT = "Không chuyển được file PowerPoint sang PDF."
+CONVERT_LOCK = threading.Lock()
+CONVERT_TIMEOUT = 180
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+def read_conf(path):
+    conf = {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r'^\s*([A-Z_][A-Z0-9_]*)=(.*?)\s*$', line)
+                if m:
+                    v = m.group(2)
+                    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                        v = v[1:-1]
+                    conf[m.group(1)] = v
+    except OSError as e:
+        log(f"Không đọc được {path}: {e}")
+    return conf
+
+
+class Config:
+    def __init__(self, conf):
+        g = conf.get
+        self.media_dir = g("MEDIA_DIR") or "/var/lib/smilelog-tv/media"
+        self.usb_dir = g("MEDIA_USB_DIR") or "/media/usb"
+        self.port = int(g("MEDIA_PORT") or 9334)
+        self.ui_dir = g("MEDIA_UI_DIR") or "/usr/local/share/smilelog-tv/media"
+        self.cache_dir = g("MEDIA_CACHE") or "/var/cache/smilelog-tv/media"
+
+    def root(self, source):
+        return {"usb": self.usb_dir, "drive": os.path.join(self.media_dir, "drive"),
+                "local": os.path.join(self.media_dir, "local")}[source]
+
+
+def kind_of(name):
+    return KINDS.get(name.rsplit(".", 1)[-1].lower()) if "." in name else None
+
+
+def scan(root):
+    items = []
+
+    def walk(d, rel, depth):
+        try:
+            entries = sorted(os.scandir(d), key=lambda e: e.name.lower())
+        except OSError:
+            return
+        for e in entries:
+            if e.name.startswith("."):
+                continue
+            r = f"{rel}/{e.name}" if rel else e.name
+            try:
+                if e.is_dir():
+                    if depth < MAX_DEPTH:
+                        walk(e.path, r, depth + 1)
+                    continue
+                kind = kind_of(e.name)
+                if kind and e.is_file():
+                    st = e.stat()
+                    items.append({"name": e.name, "path": r, "kind": kind, "size": st.st_size,
+                                  "mtime": int(st.st_mtime)})
+            except OSError:
+                continue
+
+    walk(root, "", 1)
+    items.sort(key=lambda i: i["path"].lower())
+    return items[:MAX_ITEMS]
+
+
+def parse_slides(path):
+    out = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        line = line.strip().lstrip("﻿")
+        if not line or line.startswith("#"):
+            continue
+        name, _, url = line.rpartition("|")
+        m = SLIDES_RE.match(url.strip())
+        if not m:
+            log(f"slides.txt: bỏ qua dòng không hợp lệ: {line}")
+            continue
+        out.append({"name": name.strip() or "Google Slides",
+                    "url": f"https://docs.google.com/presentation/d/{m.group(1)}/embed?start=false&loop=false&rm=minimal"})
+    return out
+
+
+def converter():
+    return shutil.which("libreoffice") or shutil.which("soffice")
+
+
+def available(cfg, source):
+    root = cfg.root(source)
+    if source == "usb":
+        try:
+            return os.path.ismount(root) or (os.path.isdir(root) and bool(os.listdir(root)))
+        except OSError:
+            return False
+    return os.path.isdir(root)
+
+
+def build_list(cfg):
+    sources = []
+    for sid, label in SOURCES:
+        av = available(cfg, sid)
+        s = {"id": sid, "label": label, "available": av}
+        if sid == "drive":
+            s["lastSync"] = None
+            try:
+                with open(os.path.join(cfg.media_dir, "drive-sync.json"), encoding="utf-8") as f:
+                    s["lastSync"] = json.load(f)
+            except (OSError, ValueError):
+                pass
+        items = scan(cfg.root(sid)) if av else []
+        for i in items:
+            i["id"] = f"{sid}/{i['path']}"
+        s["items"] = items
+        sources.append(s)
+    return {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "sources": sources,
+            "slides": parse_slides(os.path.join(cfg.media_dir, "slides.txt")), "pptx": converter() is not None}
+
+
+def resolve(cfg, source, rel):
+    """Đường dẫn thật của file trong nguồn, hoặc None nếu ra ngoài thư mục gốc hay không phải file được phép."""
+    if source not in dict(SOURCES) or not rel or "\x00" in rel:
+        return None
+    parts = rel.split("/")
+    if any(p in ("", ".", "..") or p.startswith(".") for p in parts):
+        return None
+    root = os.path.realpath(cfg.root(source))
+    path = os.path.realpath(os.path.join(root, *parts))
+    try:
+        if os.path.commonpath([root, path]) != root:
+            return None
+    except ValueError:
+        return None
+    if not os.path.isfile(path) or not kind_of(path):
+        return None
+    return path
+
+
+def to_pdf(cfg, path):
+    """Trả về (đường dẫn pdf, None) hoặc (None, (status, thông báo))."""
+    exe = converter()
+    if not exe:
+        return None, (501, ERR_NO_LO)
+    cache = cfg.cache_dir
+    try:
+        os.makedirs(cache, exist_ok=True)
+        if not os.access(cache, os.W_OK):
+            raise OSError("không ghi được")
+    except OSError:
+        cache = os.path.join(tempfile.gettempdir(), "smilelog-tv-media-cache")
+        os.makedirs(cache, exist_ok=True)
+    st = os.stat(path)
+    key = hashlib.sha1(f"{path}|{st.st_size}|{int(st.st_mtime)}".encode()).hexdigest()
+    pdf = os.path.join(cache, key + ".pdf")
+    if os.path.isfile(pdf):
+        return pdf, None
+    with CONVERT_LOCK:
+        if os.path.isfile(pdf):
+            return pdf, None
+        work = tempfile.mkdtemp(prefix="conv-", dir=cache)
+        try:
+            cmd = [exe, "--headless", "--norestore", f"-env:UserInstallation=file://{cache}/lo-profile",
+                   "--convert-to", "pdf", "--outdir", work, path]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=CONVERT_TIMEOUT)
+            out = os.path.join(work, os.path.splitext(os.path.basename(path))[0] + ".pdf")
+            if not os.path.isfile(out):
+                log(f"Chuyển PDF thất bại: {path}")
+                return None, (500, ERR_CONVERT)
+            os.replace(out, pdf)
+            return pdf, None
+        except subprocess.TimeoutExpired:
+            log(f"Chuyển PDF quá {CONVERT_TIMEOUT}s: {path}")
+            return None, (500, ERR_CONVERT)
+        except OSError as e:
+            log(f"Chuyển PDF lỗi: {e}")
+            return None, (500, ERR_CONVERT)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+
+def make_handler(cfg):
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "smilelog-tv-media"
+
+        def log_message(self, fmt, *args):
+            log("%s %s" % (self.address_string(), fmt % args))
+
+        def send_json(self, status, obj, nostore=False):
+            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            if nostore:
+                self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+
+        def send_file(self, path):
+            try:
+                size = os.path.getsize(path)
+                f = open(path, "rb")
+            except OSError:
+                return self.send_json(404, {"error": "Không tìm thấy"})
+            with f:
+                start, end, status = 0, size - 1, 200
+                rng = self.headers.get("Range")
+                if rng:
+                    m = RANGE_RE.match(rng.strip())
+                    a, b = (m.group(1), m.group(2)) if m else ("", "")
+                    if not m or (not a and not b):
+                        status = 416
+                    elif not a:  # hậu tố: n byte cuối
+                        n = int(b)
+                        if n == 0 or size == 0:
+                            status = 416
+                        else:
+                            start, status = max(0, size - n), 206
+                    else:
+                        start = int(a)
+                        end = min(int(b), size - 1) if b else size - 1
+                        status = 206 if start < size and start <= end else 416
+                if status == 416:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    return self.end_headers()
+                ext = path.rsplit(".", 1)[-1].lower()
+                self.send_response(status)
+                self.send_header("Content-Type", MIME.get(ext) or mimetypes.guess_type(path)[0]
+                                 or "application/octet-stream")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", str(max(0, end - start + 1)))
+                if status == 206:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                self.end_headers()
+                if self.command == "HEAD":
+                    return
+                f.seek(start)
+                left = end - start + 1
+                try:
+                    while left > 0:
+                        chunk = f.read(min(CHUNK, left))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+        def do_GET(self):
+            try:
+                self.route()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception as e:  # không để lộ traceback cho trình duyệt
+                log(f"Lỗi xử lý {self.path}: {e!r}")
+                try:
+                    self.send_json(500, {"error": "Lỗi máy chủ"})
+                except OSError:
+                    pass
+
+        do_HEAD = do_GET
+
+        def route(self):
+            path = urlsplit(self.path).path
+            if path == "/":
+                return self.send_file(os.path.join(cfg.ui_dir, "index.html"))
+            if path == "/api/list":
+                return self.send_json(200, build_list(cfg), nostore=True)
+            if path.startswith("/static/"):
+                name = unquote(path[len("/static/"):])
+                if not STATIC_RE.match(name) or name.startswith("."):
+                    return self.send_json(404, {"error": "Không tìm thấy"})
+                return self.send_file(os.path.join(cfg.ui_dir, name))
+            if path.startswith("/file/") or path.startswith("/pdf/"):
+                parts = path.split("/", 3)
+                real = resolve(cfg, unquote(parts[2]), unquote(parts[3])) if len(parts) == 4 else None
+                if not real:
+                    return self.send_json(404, {"error": "Không tìm thấy"})
+                if path.startswith("/file/"):
+                    return self.send_file(real)
+                if kind_of(real) != "pptx":
+                    return self.send_json(404, {"error": "Không tìm thấy"})
+                pdf, err = to_pdf(cfg, real)
+                if err:
+                    return self.send_json(err[0], {"error": err[1]})
+                return self.send_file(pdf)
+            self.send_json(404, {"error": "Không tìm thấy"})
+
+        def refuse(self):
+            self.send_response(405)
+            self.send_header("Allow", "GET, HEAD")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = refuse
+
+    return Handler
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--conf", default=CONF)
+    args = ap.parse_args()
+    cfg = Config(read_conf(args.conf))
+    server = ThreadingHTTPServer(("127.0.0.1", cfg.port), make_handler(cfg))
+    server.daemon_threads = True
+    log(f"Trình chiếu nghe tại 127.0.0.1:{cfg.port}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
