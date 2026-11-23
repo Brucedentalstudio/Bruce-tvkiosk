@@ -190,15 +190,20 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 Máy cài mới mặc định `MODE="full"`: bật lên vào **Kho việc** (`APP_URL`). Màn TV sản xuất vẫn chọn được bằng nút ⇄.
 
-Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv` và `full`):
+Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv` và `full`), và xoay bước ở Kho việc:
 
 | Việc | Tuỳ chọn (mặc định) | Tắt |
 |---|---|---|
 | Dời cả trang lên/sang trái vài điểm ảnh, thanh trên và menu dời theo | `BURNIN_SHIFT_MIN="5"` phút, `BURNIN_SHIFT_PX="4"` | `BURNIN_SHIFT_MIN=""` |
 | Màn chờ đồng hồ phủ lên trang rồi về đúng trang cũ, không tải lại. Có người dùng trong 2 phút qua thì hoãn; chạm hoặc gõ phím là tắt ngay | `BURNIN_SAVER_EVERY_MIN="60"`, `BURNIN_SAVER_SEC="60"` | `BURNIN_SAVER_EVERY_MIN=""` |
 | Làm tối ban đêm, trang vẫn bấm được | `DIM_START="22:00"`, `DIM_END="05:00"`, `DIM_LEVEL="0.3"` | `DIM_START=""` |
+| Kho việc xoay qua các bước (chỉ `full`); có người dùng thì dừng, rảnh 2 phút thì xoay tiếp | `KHO_ROTATE_SEC="30"`, `KHO_ROTATE_STAGES="MAU,CAD,CAMMAY,CAMNGUOI,SU,COMPOSITE,QC"` (MAU = Mẫu, CAMMAY = CAM máy, CAMNGUOI = CAM nguội) | `KHO_ROTATE_SEC=""` |
 
-Sửa các dòng này trong `/etc/smilelog-tv.conf` là đủ: trang đang mở đọc lại trong vòng 1 phút, không cần người tại chỗ.
+Sửa các dòng này trong `/etc/smilelog-tv.conf` là đủ: trang đang mở đọc lại trong vòng 1 phút, không cần người tại chỗ. Ví dụ chỉ xoay CAD và Sứ, mỗi bước 1 phút:
+
+```bash
+sudo sed -i -E 's/^KHO_ROTATE_STAGES=.*/KHO_ROTATE_STAGES="CAD,SU"/; s/^KHO_ROTATE_SEC=.*/KHO_ROTATE_SEC="60"/' /etc/smilelog-tv.conf
+```
 
 ### Chuyển máy đang chạy sang Kho việc
 

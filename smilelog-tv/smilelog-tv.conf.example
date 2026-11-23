@@ -4,7 +4,7 @@
 
 # Chế độ chạy. Đổi nhanh bằng lệnh (lưu vào file này, giữ sau khi khởi động lại): sudo smilelog-tv mode tv|full
 #   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo xưởng)
-#   full : màn chính, mặc định. Mở Kho việc (APP_URL), bấm thao tác được.
+#   full : màn chính, mặc định. Mở Kho việc (APP_URL), bấm thao tác được, xoay qua các bước khi không ai dùng.
 #          Không có màn chờ ngoài giờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
 MODE="full"
 
@@ -81,6 +81,13 @@ BURNIN_SAVER_SEC="60"
 DIM_START="22:00"
 DIM_END="05:00"
 DIM_LEVEL="0.3"
+
+# Chế độ full: Kho việc tự xoay qua các bước, mỗi bước KHO_ROTATE_SEC giây (để trống hoặc 0 để tắt).
+# Có người bấm, chạm, gõ phím thì dừng; rảnh 2 phút thì xoay tiếp từ bước đang đứng.
+# KHO_ROTATE_STAGES: mã bước viết hoa, cách nhau bởi dấu phẩy, không dấu cách. MAU = Mẫu, CAMMAY = CAM máy,
+# CAMNGUOI = CAM nguội, SU = Sứ. Ví dụ chỉ xoay CAD và Sứ: KHO_ROTATE_STAGES="CAD,SU".
+KHO_ROTATE_SEC="30"
+KHO_ROTATE_STAGES="MAU,CAD,CAMMAY,CAMNGUOI,SU,COMPOSITE,QC"
 
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
 # Mặc định để trống: không điều khiển bật/tắt TV; Màn TV chiếu 24/7.

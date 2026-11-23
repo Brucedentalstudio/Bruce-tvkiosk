@@ -104,11 +104,13 @@ class Hotkeys:
 CONF = os.environ.get("SMILELOG_TV_CONF", "/etc/smilelog-tv.conf")
 CONF_LINE = re.compile(r"""^([A-Z_][A-Z0-9_]*)=(?:"([^"]*)"|'([^']*)'|([^\s#"']*))\s*(?:#.*)?$""")
 HHMM = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
-# Mặc định của các tuỳ chọn chống lưu ảnh, dùng khi file cấu hình cũ chưa có dòng đó.
+STAGES = re.compile(r"^[A-Z0-9_]+(,[A-Z0-9_]+)*$")
+# Mặc định của các tuỳ chọn chống lưu ảnh và xoay bước, dùng khi file cấu hình cũ chưa có dòng đó.
 SETTING_DEFAULTS = {
     "BURNIN_SHIFT_MIN": "5", "BURNIN_SHIFT_PX": "4",
     "BURNIN_SAVER_EVERY_MIN": "60", "BURNIN_SAVER_SEC": "60",
     "DIM_START": "22:00", "DIM_END": "05:00", "DIM_LEVEL": "0.3",
+    "KHO_ROTATE_SEC": "30", "KHO_ROTATE_STAGES": "MAU,CAD,CAMMAY,CAMNGUOI,SU,COMPOSITE,QC",
 }
 
 
@@ -151,6 +153,8 @@ def settings(conf, mode):
 
     dim_start, dim_end = get("DIM_START"), get("DIM_END")
     dim_on = bool(HHMM.match(dim_start) and HHMM.match(dim_end)) and dim_start != dim_end
+    stages = get("KHO_ROTATE_STAGES")
+    stages = stages.split(",") if STAGES.match(stages) and stages.count(",") < 30 else []
     return {
         "mode": mode,
         "switch_button": get("SHOW_SWITCH_BUTTON") != "no",
@@ -162,6 +166,8 @@ def settings(conf, mode):
         "dim_end": dim_end if dim_on else "",
         "dim_level": _number(get("DIM_LEVEL"), 0.05, 0.8, float) if dim_on else 0,
         "timezone": _timezone(get("TIMEZONE")) if get("TIMEZONE") else None,
+        "rotate_sec": _number(get("KHO_ROTATE_SEC"), 5, 3600) if stages else 0,
+        "rotate_stages": stages,
     }
 
 

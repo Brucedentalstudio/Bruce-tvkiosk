@@ -79,17 +79,18 @@
   send('settings').then((s) => { if (s.switch_button !== false) document.documentElement.appendChild(host); });
 })();
 
-// Chống lưu ảnh cho màn hình sáng 24/7. Giá trị lấy từ /etc/smilelog-tv.conf qua
+// Chống lưu ảnh cho màn hình sáng 24/7 và xoay bước Kho việc. Giá trị lấy từ /etc/smilelog-tv.conf qua
 // dịch vụ trên máy (đã kiểm tra ở đó), đọc lại mỗi phút; dịch vụ không trả lời thì mọi tính năng tắt.
 (() => {
   if (window.top !== window || window.smilelogTvBurnin) return;
   window.smilelogTvBurnin = true;
-  const IDLE_MS = 120000; // có người chạm trong 2 phút qua thì không hiện màn chờ
+  const IDLE_MS = 120000; // có người chạm trong 2 phút qua thì không hiện màn chờ, không xoay bước
   const Z = 2147483646;
   let cfg = {};
   let lastInput = Date.now();
   let lastShift = Date.now();
   let lastSaver = Date.now();
+  let lastRotate = Date.now();
   let step = 0;
   let saver = null;
   let saverUntil = 0;
@@ -224,6 +225,21 @@
     if (!want && dim) { dim.remove(); dim = null; }
   }
 
+  // 4. Xoay bước Kho việc (?stage=KEY). Vue Router: đổi URL tại chỗ rồi báo popstate để trang tự lọc lại,
+  // không tải lại trang. Trang không có Vue Router thì mở lại URL (replace, không làm dài lịch sử).
+  function rotate() {
+    const list = cfg.rotate_stages || [];
+    const url = new URL(location.href);
+    url.searchParams.set('stage', list[(list.indexOf(url.searchParams.get('stage')) + 1) % list.length]);
+    lastRotate = Date.now();
+    if (history.state && typeof history.state === 'object' && 'position' in history.state) {
+      history.replaceState(null, '', url);
+      dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    } else {
+      location.replace(url);
+    }
+  }
+
   function tick() {
     const now = Date.now();
     if (!on()) {
@@ -250,6 +266,13 @@
       showSaver(); // vừa có người dùng thì hoãn, hiện ngay khi rảnh 2 phút
     }
     setDim(nightNow());
+    const kho = /^\/kho-viec\/?$/.test(location.pathname);
+    if (cfg.mode === 'full' && kho && cfg.rotate_sec && cfg.rotate_stages && cfg.rotate_stages.length) {
+      // Màn chờ đang hiện: dừng, sau đó bước hiện tại được chiếu đủ một lượt. Có người dùng: dừng tới khi
+      // rảnh 2 phút rồi xoay tiếp từ bước đang đứng.
+      if (saver) lastRotate = now;
+      else if (idle() && now - lastRotate >= cfg.rotate_sec * 1000) rotate();
+    }
   }
 
   const load = () => send('settings').then((s) => { cfg = s && !s.error ? s : {}; tick(); });

@@ -154,7 +154,7 @@ cmd_browser() {
         log "Không đặt được độ phân giải $RESOLUTION trên $output"
     fi
   fi
-  # Tiện ích Chromium: nút nổi đổi chế độ, chống lưu ảnh màn hình. Luôn nạp;
+  # Tiện ích Chromium: nút nổi đổi chế độ, chống lưu ảnh màn hình, xoay bước Kho việc. Luôn nạp;
   # SHOW_SWITCH_BUTTON="no" chỉ ẩn nút nổi (tiện ích tự đọc qua smilelog-tv-control), phím tắt vẫn dùng được.
   local ext=()
   if [ -f "$EXTENSION/manifest.json" ]; then

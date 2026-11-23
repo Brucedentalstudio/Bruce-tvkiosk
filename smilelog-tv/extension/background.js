@@ -1,7 +1,7 @@
 // Nhận lệnh từ nút nổi (content.js) và chuyển cho smilelog-tv-control trên chính máy này.
 // Token nằm trong token.json của tiện ích: trang web không đọc được, nên chỉ nút này gọi được.
 const BASE = 'http://127.0.0.1:9333';
-// settings: giá trị chống lưu ảnh, dịch vụ đã kiểm tra từ /etc/smilelog-tv.conf.
+// settings: giá trị chống lưu ảnh và xoay bước Kho việc, dịch vụ đã kiểm tra từ /etc/smilelog-tv.conf.
 const ACTIONS = { mode: 'GET', settings: 'GET', toggle: 'POST', restart: 'POST' };
 const token = fetch(chrome.runtime.getURL('token.json')).then((r) => r.json()).then((j) => j.token);
 
