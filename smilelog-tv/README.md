@@ -94,6 +94,8 @@ của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv u
   `systemctl list-timers smilelog-tv-update-check.timer`.
 - Bản mới mà `install.sh` lỗi giữa chừng thì máy không thử lại commit đó; gộp một commit sửa lỗi lên
   `main` là máy tự nhận, hoặc chạy `sudo smilelog-tv update --force`.
+- Bản mới có `smilelog-tv`, `install.sh` hoặc `uninstall.sh` lỗi cú pháp (`bash -n`) thì máy không cài,
+  giữ bản đang chạy, ghi một dòng log và chờ commit sửa.
 
 ## Wayland hay X11 cho kiosk
 
