@@ -84,7 +84,9 @@ của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv u
 - Gộp (merge) vào `main` là mọi máy nhận bản mới trong khoảng `AUTO_UPDATE_CHECK_MIN` phút cộng 1-3
   phút (mặc định khoảng 10-15 phút), kể cả giữa ca.
 - Khi cài bản mới, kiosk mở lại nên **màn hình TV tối khoảng 10-30 giây**, một lần cho mỗi bản mới.
-- Lượt kiểm tra nhanh không nâng Tailscale, RustDesk: việc đó để lượt `AUTO_UPDATE_AT`.
+- Không có bản mới thì lượt kiểm tra nhanh không nâng Tailscale, RustDesk: việc đó để lượt
+  `AUTO_UPDATE_AT`. Có bản mới thì `install.sh` chạy như mọi lần cài, nên RustDesk có thể được nâng
+  ngay lúc đó, kể cả giữa ca.
 - Mất mạng: chỉ ghi một dòng log, không báo động; có mạng lại thì kiểm tra tiếp.
 - Mỗi lúc chỉ một lượt cập nhật chạy; lượt đến sau (hằng ngày, kiểm tra nhanh, chạy tay) bỏ qua.
 - Tắt: để trống `AUTO_UPDATE_CHECK_MIN=""` trong `/etc/smilelog-tv.conf` rồi chạy lại `sudo ./install.sh`
@@ -92,10 +94,11 @@ của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv u
 - Máy đã cài từ trước không cần làm gì: lượt cập nhật kế tiếp của máy chạy `install.sh` bản mới, tự
   thêm `AUTO_UPDATE_CHECK_MIN="10"` vào file cấu hình và tạo timer. Kiểm tra:
   `systemctl list-timers smilelog-tv-update-check.timer`.
-- Bản mới mà `install.sh` lỗi giữa chừng thì máy không thử lại commit đó; gộp một commit sửa lỗi lên
-  `main` là máy tự nhận, hoặc chạy `sudo smilelog-tv update --force`.
+- Bản mới mà `install.sh` lỗi giữa chừng (ví dụ apt đang bận, mất điện lúc cài) thì lượt kiểm tra sau
+  thử lại, tối đa 3 lần cho mỗi commit. Lỗi đủ 3 lần thì máy chờ commit mới hơn, hoặc chạy
+  `sudo smilelog-tv update --force`. Lỗi trước bước mở lại kiosk thì màn hình không tối.
 - Bản mới có `smilelog-tv`, `install.sh` hoặc `uninstall.sh` lỗi cú pháp (`bash -n`) thì máy không cài,
-  giữ bản đang chạy, ghi một dòng log và chờ commit sửa.
+  giữ bản đang chạy, ghi một dòng log và chờ commit sửa (nhớ cả qua khởi động lại).
 
 ## Wayland hay X11 cho kiosk
 

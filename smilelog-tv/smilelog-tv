@@ -330,21 +330,41 @@ cmd_version() {
   fi
 }
 
-UPDATE_LOCK=${SMILELOG_TV_UPDATE_LOCK:-/run/lock/smilelog-tv-update.lock}
+# Khoá trong /run (chỉ root ghi): tài khoản khác không giữ được khoá để chặn cập nhật.
+UPDATE_LOCK=${SMILELOG_TV_UPDATE_LOCK:-/run/smilelog-tv-update.lock}
+UPDATE_TRIES=3
+# Trạng thái cập nhật giữ qua khởi động lại, nằm trong $SRC/.git (chỉ root ghi):
+#   smilelog-tv-installed  commit đã cài xong (install.sh chạy hết, không lỗi)
+#   smilelog-tv-bad        commit bị từ chối vì lỗi cú pháp
+#   smilelog-tv-tries      "<commit> <số lần>" của commit đang cài chưa xong
+# Máy cập nhật từ bản cũ chưa có smilelog-tv-installed: coi HEAD là bản đã cài.
+installed_commit() {
+  cat "$SRC/.git/smilelog-tv-installed" 2>/dev/null && return 0
+  [ -f "$SRC/.git/smilelog-tv-tries" ] || git -C "$SRC" rev-parse HEAD
+}
+update_tries() {
+  local n
+  n=$(awk -v c="$1" '$1 == c {print $2}' "$SRC/.git/smilelog-tv-tries" 2>/dev/null || true)
+  echo "${n:-0}"
+}
 
 # Lấy bản mới nhất của UPDATE_BRANCH; có thay đổi thì chạy lại install.sh của bản đó.
 # Mỗi lúc chỉ một lượt cập nhật (timer hằng ngày, kiểm tra nhanh, chạy tay): lượt đến sau bỏ qua, không chờ.
+# install.sh lỗi thì lượt sau thử lại cùng commit, tối đa UPDATE_TRIES lần (--force bỏ qua giới hạn).
 cmd_update() {
   local repo=${UPDATE_REPO:-https://github.com/Brucedentalstudio/Bruce-tvkiosk.git} branch=${UPDATE_BRANCH:-main}
+  local new f bad="" n rc=0
   exec 9>"$UPDATE_LOCK"
   flock -n 9 || { echo "Đang có lượt cập nhật khác chạy: bỏ qua lượt này" >&2; return 0; }
   if [ ! -d "$SRC/.git" ]; then
     git clone --quiet --depth 1 --branch "$branch" "$repo" "$SRC" ||
       { log "Không tải được $repo (repo private thì cần khoá deploy, xem README)"; exit 1; }
+    new=$(git -C "$SRC" rev-parse HEAD)
   else
     git -C "$SRC" fetch --quiet --depth 1 origin "$branch" ||
       { log "Không tải được bản mới từ $repo"; exit 1; }
-    if [ "$(git -C "$SRC" rev-parse HEAD)" = "$(git -C "$SRC" rev-parse FETCH_HEAD)" ] && [ "${1:-}" != --force ]; then
+    new=$(git -C "$SRC" rev-parse FETCH_HEAD)
+    if [ "$new" = "$(installed_commit)" ] && [ "${1:-}" != --force ]; then
       # Lượt kiểm tra nhanh: lượt khác vừa cài bản này; Tailscale, RustDesk để lượt hằng ngày nâng.
       [ "${1:-}" = --check ] && return 0
       echo "Đã là bản mới nhất: $(cmd_version)"
@@ -356,21 +376,31 @@ cmd_update() {
       return 0
     fi
     # Bản mới lỗi cú pháp thì không cài: giữ bản đang chạy, nhớ commit đó để lượt kiểm tra nhanh bỏ qua.
-    local new f bad=""
-    new=$(git -C "$SRC" rev-parse FETCH_HEAD)
     for f in smilelog-tv install.sh uninstall.sh; do
       git -C "$SRC" show "FETCH_HEAD:smilelog-tv/$f" 2>/dev/null | bash -n 2>/dev/null || bad+=" $f"
     done
     if [ -n "$bad" ]; then
-      mkdir -p "$STATE"
-      echo "$new" >"$STATE/update-bad"
+      echo "$new" >"$SRC/.git/smilelog-tv-bad"
       log "Không cài bản ${new:0:7}: lỗi cú pháp ở$bad, giữ bản đang chạy"
+      exit 1
+    fi
+    n=$(update_tries "$new")
+    if [ "$n" -ge "$UPDATE_TRIES" ] && [ "${1:-}" != --force ]; then
+      log "Bản ${new:0:7} đã cài lỗi $n lần: chờ commit mới hoặc chạy sudo smilelog-tv update --force"
       exit 1
     fi
     git -C "$SRC" reset --quiet --hard FETCH_HEAD
   fi
+  n=$(($(update_tries "$new") + 1))
+  echo "$new $n" >"$SRC/.git/smilelog-tv-tries"
   log "Cập nhật lên: $(cmd_version)"
-  "$SRC/smilelog-tv/install.sh"
+  "$SRC/smilelog-tv/install.sh" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "Cài bản ${new:0:7} lỗi (mã $rc, lần $n/$UPDATE_TRIES), lượt sau thử lại"
+    exit "$rc"
+  fi
+  echo "$new" >"$SRC/.git/smilelog-tv-installed"
+  rm -f "$SRC/.git/smilelog-tv-tries"
 }
 
 # Kiểm tra nhanh: chỉ hỏi GitHub commit mới nhất của UPDATE_BRANCH, khác bản đang chạy mới cập nhật.
@@ -388,10 +418,10 @@ cmd_update_check() {
     return 0
   fi
   rm -f "$STATE/update-offline"
-  [ "$remote" = "$(git -C "$SRC" rev-parse HEAD)" ] && return 0
-  # Commit này đã bị từ chối vì lỗi cú pháp: chờ commit sửa, không ghi log lại.
-  [ "$remote" = "$(cat "$STATE/update-bad" 2>/dev/null)" ] && return 0
-  log "Có bản mới trên $branch (${remote:0:7}): cập nhật"
+  [ "$remote" = "$(installed_commit)" ] && return 0
+  # Commit bị từ chối vì lỗi cú pháp, hoặc đã cài lỗi đủ UPDATE_TRIES lần: chờ commit mới, không ghi log lại.
+  [ "$remote" = "$(cat "$SRC/.git/smilelog-tv-bad" 2>/dev/null)" ] && return 0
+  [ "$(update_tries "$remote")" -ge "$UPDATE_TRIES" ] && return 0
   cmd_update --check
 }
 
