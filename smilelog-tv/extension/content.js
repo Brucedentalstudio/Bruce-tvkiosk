@@ -83,7 +83,7 @@
 // dịch vụ trên máy (đã kiểm tra ở đó), đọc lại mỗi phút; dịch vụ không trả lời thì mọi tính năng tắt.
 (() => {
   if (window.top !== window || window.smilelogTvBurnin) return;
-  window.smilelogTvBurnin = true;
+  window.smilelogTvBurnin = { touched: () => touched.size }; // thế giới riêng của tiện ích, trang không thấy
   const IDLE_MS = 120000; // có người chạm trong 2 phút qua thì không hiện màn chờ, không xoay bước
   const Z = 2147483646;
   let cfg = {};
@@ -117,6 +117,7 @@
   };
   function shift(dx, dy) {
     if (!document.body) return;
+    for (const el of touched.keys()) if (!el.isConnected) touched.delete(el); // hộp thoại, thông báo đã đóng
     for (const el of document.body.children) {
       const { position: pos, display } = getComputedStyle(el);
       if (display === 'none' || !(pos === 'static' || (pos === 'relative' && touched.has(el)))) continue;
@@ -148,22 +149,30 @@
         #d { font-size: 2.6vw; margin-top: 1.2vw; font-weight: 300; }
       </style><div id="b"><div id="t"></div><div id="d"></div></div>`;
     const b = root.getElementById('b');
+    // Múi giờ trình duyệt không biết thì dùng giờ của máy, không để lỗi làm màn chờ chớp tắt.
+    const local = (fn, opts) => {
+      try {
+        return fn({ ...opts, timeZone: cfg.timezone || undefined });
+      } catch (e) {
+        return fn(opts);
+      }
+    };
     const draw = () => {
       const now = new Date();
-      root.getElementById('t').textContent = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: cfg.timezone || undefined });
-      const d = now.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric', timeZone: cfg.timezone || undefined });
+      saver.drawn = Date.now();
+      root.getElementById('t').textContent = local((o) => now.toLocaleTimeString('vi-VN', o), { hour: '2-digit', minute: '2-digit', hour12: false });
+      const d = local((o) => now.toLocaleDateString('vi-VN', o), { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' });
       root.getElementById('d').textContent = d.charAt(0).toUpperCase() + d.slice(1);
       b.style.left = `${Math.round(Math.random() * Math.max(0, innerWidth - b.offsetWidth))}px`;
       b.style.top = `${Math.round(Math.random() * Math.max(0, innerHeight - b.offsetHeight))}px`;
-      saver.drawn = Date.now();
     };
-    saver.draw = draw;
+    saver.draw = () => { try { draw(); } catch (e) { /* vẫn giữ màn chờ đen tới hết giờ */ } };
+    saverUntil = Date.now() + cfg.saver_sec * 1000;
+    lastSaver = Date.now();
     // Chạm vào màn chờ chỉ để tắt nó, không bấm xuyên xuống nút bên dưới: giữ lớp phủ tới hết cú bấm.
     saver.addEventListener('click', () => removeSaver());
     document.documentElement.appendChild(saver);
-    draw();
-    saverUntil = Date.now() + cfg.saver_sec * 1000;
-    lastSaver = Date.now();
+    saver.draw();
   }
   function removeSaver() {
     if (saver) saver.remove();
@@ -186,11 +195,10 @@
       lastXY = xy;
       if (first) return;
     }
+    // Phím luôn đi tiếp xuống trang (máy quét mã vạch gõ như bàn phím, không được mất ký tự đầu); có phím
+    // thì cũng dừng xoay bước 2 phút, nên không đổi trang giữa lúc đang quét.
     lastInput = Date.now();
-    if (saver && saver.style.opacity !== '0') {
-      if (e.type === 'keydown') { e.preventDefault(); e.stopImmediatePropagation(); }
-      hideSaver(e.type !== 'keydown');
-    }
+    if (saver && saver.style.opacity !== '0') hideSaver(e.type !== 'keydown');
   };
   addEventListener('keydown', onInput, true);
   for (const t of ['pointerdown', 'pointermove', 'touchstart', 'wheel']) addEventListener(t, onInput, { capture: true, passive: true });
@@ -227,11 +235,38 @@
 
   // 4. Xoay bước Kho việc (?stage=KEY). Vue Router: đổi URL tại chỗ rồi báo popstate để trang tự lọc lại,
   // không tải lại trang. Trang không có Vue Router thì mở lại URL (replace, không làm dài lịch sử).
+  // Chỉ xoay qua bước máy chủ có cho tài khoản này (cùng danh sách chip của Kho việc), theo thứ tự trong
+  // cấu hình; hỏi lại mỗi 10 phút. Không hỏi được thì dùng nguyên danh sách cấu hình.
+  let offered = null;
+  let offeredAt = -Infinity;
+  function refreshOffered() {
+    offeredAt = Date.now();
+    const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+    try {
+      const lab = localStorage.getItem('app-lab-id');
+      if (lab) headers['X-Lab-Id'] = lab;
+    } catch (e) { /* không đọc được localStorage: bỏ qua */ }
+    fetch('/api/work-queue/by-stage?pageSize=1', { credentials: 'include', headers })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((j) => {
+        const stages = (j && (j.stages || (j.data && j.data.stages))) || null;
+        offered = Array.isArray(stages) ? stages.map((s) => String(s && s.key)) : null;
+      })
+      .catch(() => { offered = null; });
+  }
+  function rotationList() {
+    const conf = cfg.rotate_stages || [];
+    if (!offered) return conf;
+    return conf.map((k) => offered.find((o) => o.toUpperCase() === k.toUpperCase())).filter(Boolean);
+  }
   function rotate() {
-    const list = cfg.rotate_stages || [];
-    const url = new URL(location.href);
-    url.searchParams.set('stage', list[(list.indexOf(url.searchParams.get('stage')) + 1) % list.length]);
+    const list = rotationList();
     lastRotate = Date.now();
+    if (!list.length) return;
+    const url = new URL(location.href);
+    const cur = (url.searchParams.get('stage') || '').toUpperCase();
+    url.searchParams.set('stage', list[(list.findIndex((k) => k.toUpperCase() === cur) + 1) % list.length]);
+    url.searchParams.delete('holder'); // như khi bấm chip: đổi bước thì bỏ người giữ
     if (history.state && typeof history.state === 'object' && 'position' in history.state) {
       history.replaceState(null, '', url);
       dispatchEvent(new PopStateEvent('popstate', { state: null }));
@@ -270,6 +305,7 @@
     if (cfg.mode === 'full' && kho && cfg.rotate_sec && cfg.rotate_stages && cfg.rotate_stages.length) {
       // Màn chờ đang hiện: dừng, sau đó bước hiện tại được chiếu đủ một lượt. Có người dùng: dừng tới khi
       // rảnh 2 phút rồi xoay tiếp từ bước đang đứng.
+      if (now - offeredAt >= 600000) refreshOffered();
       if (saver) lastRotate = now;
       else if (idle() && now - lastRotate >= cfg.rotate_sec * 1000) rotate();
     }

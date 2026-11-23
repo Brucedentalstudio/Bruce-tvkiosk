@@ -64,7 +64,7 @@ class Settings(unittest.TestCase):
         self.assertEqual((s["saver_every_min"], s["saver_sec"]), (60, 60))
         self.assertEqual((s["dim_start"], s["dim_end"], s["dim_level"]), ("22:00", "05:00", 0.3))
         self.assertEqual(s["rotate_sec"], 30)
-        self.assertEqual(s["rotate_stages"], ["MAU", "CAD", "CAMMAY", "CAMNGUOI", "SU", "COMPOSITE", "QC"])
+        self.assertEqual(s["rotate_stages"], ["MAU", "CAD", "CAM", "CAMNGUOI", "SU", "COMPOSITE", "QC"])
         self.assertTrue(s["switch_button"])
         self.assertEqual(s["mode"], "full")
 
