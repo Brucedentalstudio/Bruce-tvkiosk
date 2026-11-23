@@ -3,7 +3,7 @@
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
 # Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
-#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (TV treo xưởng)
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo xưởng)
 #   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
 #          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
 MODE="tv"
@@ -68,7 +68,7 @@ WORK_END=""
 WORK_DAYS="1,2,3,4,5,6"
 
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
-# Mặc định để trống: TV luôn bật, ngoài giờ đã có màn chờ.
+# Mặc định để trống: không điều khiển bật/tắt TV; Màn TV chiếu 24/7.
 SCREEN_ON=""
 SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"

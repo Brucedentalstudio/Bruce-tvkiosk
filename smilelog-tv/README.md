@@ -101,7 +101,7 @@ nhất là cắm thêm một máy chạy Linux vào HDMI. TV chỉ còn làm vi�
 | **Mini PC cũ chip Intel** (ví dụ Dell OptiPlex 3050 **Micro**, i3/i5 đời 7, RAM 8 GB, SSD) | Ổ SSD bền hơn thẻ nhớ, dư sức, card Intel chạy tốt trên Linux | Phải bật **AC Recovery = Power On** trong BIOS; không có HDMI-CEC |
 | **Raspberry Pi 5 (4 GB)** + nguồn 27W, tản nhiệt có quạt, thẻ nhớ loại chịu ghi liên tục | Máy mới có bảo hành, có điện là tự lên, bật/tắt TV qua HDMI-CEC | Thẻ nhớ kém bền hơn SSD; cần cáp micro-HDMI |
 
-TV để bật liên tục và ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
+TV để bật liên tục và (nếu đặt giờ làm) ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
 được, chọn loại rẻ hơn ở thời điểm mua. Tránh máy có card đồ hoạ rời (ví dụ HP Z2 Mini có Quadro):
 tốn điện và dễ lỗi driver với giao diện kiosk.
 
@@ -155,7 +155,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
 | Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
-| Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi Lab vắng |
 | Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
