@@ -58,7 +58,7 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
 | Việc | Cách |
 |---|---|
-| **Cập nhật** | Mỗi đêm lúc `AUTO_UPDATE_AT` (mặc định 02:30) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
+| **Cập nhật** | Mỗi ngày lúc `AUTO_UPDATE_AT` (mặc định 18:30, trước giờ khởi động lại) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
 | **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
 | **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
 | **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
@@ -159,7 +159,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
-| Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ giao ca; màn hình tối khoảng 1 phút) |
+| Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ Bruce chọn; màn hình tối khoảng 1 phút) |
 
 ## Lệnh hay dùng
 
@@ -186,13 +186,15 @@ sudo sed -i -E 's/^WORK_START=.*/WORK_START=""/; s/^WORK_END=.*/WORK_END=""/' /e
 
 Không cần chạy lại `install.sh`: watchdog chạy mỗi phút và đọc lại file này mỗi lần, nên trong vòng 1 phút TV tự quay về Màn TV.
 
-Để đổi giờ khởi động lại về 19:00 (máy cũ đang để 03:30), sửa file rồi chạy lại `install.sh`, vì hẹn giờ khởi động lại là timer systemd do `install.sh` ghi ra, chỉ sửa file cấu hình thì chưa đổi:
+Để đổi giờ khởi động lại về 19:00 và giờ cập nhật về 18:30 (máy cũ đang để 03:30 và 02:30), sửa file rồi chạy lại `install.sh`, vì hẹn giờ là timer systemd do `install.sh` ghi ra, chỉ sửa file cấu hình thì chưa đổi:
 
 ```bash
-sudo sed -i -E 's/^REBOOT_AT=.*/REBOOT_AT="19:00"/' /etc/smilelog-tv.conf
-sudo smilelog-tv update --force   # lấy bản mới từ GitHub rồi chạy lại install.sh, ghi lại các timer
-systemctl list-timers smilelog-tv-reboot.timer   # kiểm tra: giờ kế tiếp phải là 19:00
+sudo sed -i -E 's/^REBOOT_AT=.*/REBOOT_AT="19:00"/; s/^AUTO_UPDATE_AT=.*/AUTO_UPDATE_AT="18:30"/' /etc/smilelog-tv.conf
+sudo smilelog-tv update --force
+systemctl list-timers 'smilelog-tv-reboot.timer' 'smilelog-tv-update.timer'   # kiểm tra: 19:00 và 18:30
 ```
+
+Lệnh `update --force` lấy bản mới nhất của nhánh `main` trên GitHub rồi chạy lại `install.sh` để ghi lại các timer. Nếu `install.sh` hỏi "Chọn 1 hoặc 2", bấm Enter để giữ cách vẽ màn hình hiện tại. Kiosk khởi động lại nên màn hình tối khoảng 10-30 giây.
 
 Hoặc chạy `sudo ./install.sh` trong thư mục đã chép lên máy lúc cài.
 

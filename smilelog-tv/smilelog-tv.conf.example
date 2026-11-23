@@ -73,7 +73,7 @@ SCREEN_ON=""
 SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"
 
-# Khởi động lại máy mỗi ngày để dọn bộ nhớ. Mặc định 19:00 vì Lab làm việc 24/7: giờ giao ca,
+# Khởi động lại máy mỗi ngày để dọn bộ nhớ. Mặc định 19:00 (giờ Bruce chọn) vì Lab làm việc 24/7:
 # màn hình tối khoảng 1 phút, ca đêm vẫn có Màn TV. Để trống để tắt.
 REBOOT_AT="19:00"
 
@@ -93,11 +93,12 @@ TAILSCALE_HOSTNAME=""
 ENABLE_RUSTDESK="yes"
 RUSTDESK_VERSION=""
 
-# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật từ xa: mỗi ngày máy lấy bản mới nhất từ GitHub và tự cài lại; màn hình tối 10-30 giây khi có bản mới,
+# nên đặt trước giờ REBOOT_AT để gộp vào lúc khởi động lại.
 # Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
 UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
 UPDATE_BRANCH="main"
-AUTO_UPDATE_AT="02:30"
+AUTO_UPDATE_AT="18:30"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).
