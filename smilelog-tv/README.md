@@ -5,12 +5,12 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 
 ## Ba chế độ
 
-| | `tv` (mặc định) | `full` | `training` (Đào tạo) |
+| | `tv` | `full` (mặc định, màn chính Kho việc) | `training` (Đào tạo) |
 |---|---|---|---|
 | Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản |
 | Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
 | Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do |
-| Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường | Không áp dụng |
+| Trang đăng nhập | Báo động: TV bị văng phiên | Báo động một lần, không mở lại trình duyệt | Không áp dụng |
 | Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
 | Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị |
 
@@ -175,16 +175,45 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 | Tình huống | Xử lý |
 |---|---|
-| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `TV_URL` |
+| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `APP_URL` (Kho việc, chế độ `full`) hoặc `TV_URL` (chế độ `tv`) |
 | Mất mạng ngắn | Smilelog tự hiện "Mất kết nối" và tự tải lại sau 10 phút |
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
-| Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
+| Hết phiên, đang ở trang đăng nhập (chế độ `tv` và `full`) | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích; rời trang đăng nhập thì lần sau lại báo |
 | Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi Lab vắng |
 | Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
 | Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ Bruce chọn; màn hình tối khoảng 1 phút) |
+
+## Màn chính Kho việc và chống lưu ảnh
+
+Máy cài mới mặc định `MODE="full"`: bật lên vào **Kho việc** (`APP_URL`). Màn TV sản xuất vẫn chọn được bằng nút ⇄.
+
+Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv` và `full`), và xoay bước ở Kho việc:
+
+| Việc | Tuỳ chọn (mặc định) | Tắt |
+|---|---|---|
+| Dời cả trang lên/sang trái vài điểm ảnh, thanh trên và menu dời theo | `BURNIN_SHIFT_MIN="5"` phút, `BURNIN_SHIFT_PX="4"` | `BURNIN_SHIFT_MIN=""` |
+| Màn chờ đồng hồ phủ lên trang rồi về đúng trang cũ, không tải lại. Có người dùng trong 2 phút qua thì hoãn; chạm hoặc gõ phím là tắt ngay | `BURNIN_SAVER_EVERY_MIN="60"`, `BURNIN_SAVER_SEC="60"` | `BURNIN_SAVER_EVERY_MIN=""` |
+| Làm tối ban đêm, trang vẫn bấm được | `DIM_START="22:00"`, `DIM_END="05:00"`, `DIM_LEVEL="0.3"` | `DIM_START=""` |
+| Kho việc xoay qua các bước (chỉ `full`); có người dùng thì dừng, rảnh 2 phút thì xoay tiếp | `KHO_ROTATE_SEC="30"`, `KHO_ROTATE_STAGES="MAU,CAD,CAM,CAMNGUOI,SU,COMPOSITE,QC"` (MAU = Mẫu, CAM = CAM máy, CAMNGUOI = CAM nguội). Chỉ xoay qua bước Kho việc của máy chủ đang có cho tài khoản đó | `KHO_ROTATE_SEC=""` |
+
+Sửa các dòng này trong `/etc/smilelog-tv.conf` là đủ: trang đang mở đọc lại trong vòng 1 phút, không cần người tại chỗ. Ví dụ chỉ xoay CAD và Sứ, mỗi bước 1 phút:
+
+```bash
+sudo sed -i -E 's/^KHO_ROTATE_STAGES=.*/KHO_ROTATE_STAGES="CAD,SU"/; s/^KHO_ROTATE_SEC=.*/KHO_ROTATE_SEC="60"/' /etc/smilelog-tv.conf
+```
+
+### Chuyển máy đang chạy sang Kho việc
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf`, nên máy đã cài vẫn giữ `MODE` cũ (thường là `tv`). Vào máy từ xa (Tailscale SSH) rồi chạy:
+
+```bash
+sudo smilelog-tv mode full
+```
+
+Lệnh này ghi `MODE="full"` vào `/etc/smilelog-tv.conf` (giữ sau khi khởi động lại) và mở lại trình duyệt ngay vào Kho việc. Các tuỳ chọn chống lưu ảnh ở trên được thêm vào file cấu hình với giá trị mặc định ở lần cập nhật kế tiếp (`smilelog-tv update` chạy lại `install.sh`).
 
 ## Lệnh hay dùng
 

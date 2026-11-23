@@ -2,11 +2,11 @@
 # install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
-# Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
+# Chế độ chạy. Đổi nhanh bằng lệnh (lưu vào file này, giữ sau khi khởi động lại): sudo smilelog-tv mode tv|full
 #   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo xưởng)
-#   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
-#          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
-MODE="tv"
+#   full : màn chính, mặc định. Mở Kho việc (APP_URL), bấm thao tác được, xoay qua các bước khi không ai dùng.
+#          Không có màn chờ ngoài giờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
+MODE="full"
 
 # Đổi chế độ ngay trên TV, không cần SSH:
 #   - Phím tắt (cắm bàn phím USB hoặc bàn phím không dây): Ctrl+Alt+M đổi chế độ,
@@ -66,6 +66,29 @@ TIMEZONE="Asia/Ho_Chi_Minh"
 WORK_START=""
 WORK_END=""
 WORK_DAYS="1,2,3,4,5,6"
+
+# Chống lưu ảnh cho màn hình sáng 24/7 (chế độ tv và full). Để trống hoặc 0 để tắt từng mục.
+# Đổi xong không cần chạy lại install.sh: trang đang mở tự đọc lại trong vòng 1 phút.
+# Dời cả trang lên/sang trái tối đa BURNIN_SHIFT_PX điểm ảnh, mỗi BURNIN_SHIFT_MIN phút.
+BURNIN_SHIFT_MIN="5"
+BURNIN_SHIFT_PX="4"
+# Màn chờ đồng hồ BURNIN_SAVER_SEC giây, mỗi BURNIN_SAVER_EVERY_MIN phút (tối thiểu 5). Không tải lại trang.
+# Có người bấm, chạm, gõ phím trong 2 phút qua thì hoãn; chạm vào màn chờ là tắt ngay.
+BURNIN_SAVER_EVERY_MIN="60"
+BURNIN_SAVER_SEC="60"
+# Làm tối ban đêm từ DIM_START tới DIM_END (qua đêm được), độ tối DIM_LEVEL (0.05 đến 0.8).
+# Trang vẫn đọc và bấm được. Để trống DIM_START để tắt.
+DIM_START="22:00"
+DIM_END="05:00"
+DIM_LEVEL="0.3"
+
+# Chế độ full: Kho việc tự xoay qua các bước, mỗi bước KHO_ROTATE_SEC giây (để trống hoặc 0 để tắt).
+# Có người bấm, chạm, gõ phím thì dừng; rảnh 2 phút thì xoay tiếp từ bước đang đứng.
+# KHO_ROTATE_STAGES: mã bước viết hoa, cách nhau bởi dấu phẩy, không dấu cách. MAU = Mẫu, CAM = CAM máy,
+# CAMNGUOI = CAM nguội, SU = Sứ. Bước máy chủ chưa có cho tài khoản đó thì tự bỏ qua.
+# Ví dụ chỉ xoay CAD và Sứ: KHO_ROTATE_STAGES="CAD,SU".
+KHO_ROTATE_SEC="30"
+KHO_ROTATE_STAGES="MAU,CAD,CAM,CAMNGUOI,SU,COMPOSITE,QC"
 
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
 # Mặc định để trống: không điều khiển bật/tắt TV; Màn TV chiếu 24/7.

@@ -43,6 +43,8 @@ echo "==> Cấu hình"
 added=""
 while IFS= read -r line; do
   key=${line%%=*}
+  # Cấu hình cũ chưa có MODE vẫn chạy Màn TV (như smilelog-tv); chỉ máy cài mới mặc định Kho việc.
+  [ "$key" = MODE ] && line='MODE="tv"'
   grep -q "^$key=" "$CONF" || added+="$line"$'\n'
 done < <(grep -E '^[A-Z_]+=' "$HERE/smilelog-tv.conf.example")
 if [ -n "$added" ]; then
