@@ -229,6 +229,7 @@ if [ "${ENABLE_MEDIA:-no}" = yes ]; then
     ADMIN=${SUDO_USER:-}
     id "$ADMIN" >/dev/null 2>&1 || ADMIN=root
     install -d -m 755 "$MDIR"
+    chmod o+x /var/lib/smilelog-tv 2>/dev/null || true # Ubuntu: thư mục này 0750, cho pi đi qua tới media/local
     [ -d "$MDIR/local" ] || install -d -m 755 -o "$ADMIN" "$MDIR/local"
     [ -d "$MDIR/drive" ] || install -d -m 755 -o "$KIOSK_USER" -g "$KIOSK_USER" "$MDIR/drive"
     if [ ! -f "$MDIR/slides.txt" ]; then

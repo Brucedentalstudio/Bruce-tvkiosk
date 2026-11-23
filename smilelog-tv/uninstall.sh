@@ -36,8 +36,13 @@ if [ -f "$CMDLINE" ]; then sed -i -E 's/ ?video=HDMI-A-1:[^ ]*//g' "$CMDLINE"; f
 
 if [ "${1:-}" = --purge ]; then
   # File Trình chiếu của người dùng (MEDIA_DIR, có thể nằm ngoài thư mục của tài khoản kiosk).
-  MEDIA_DIR=$(grep '^MEDIA_DIR=' /etc/smilelog-tv.conf 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '"' || true)
-  case "${MEDIA_DIR:-/var/lib/smilelog-tv/media}" in /|/var|/var/lib|/usr|/etc|/home) ;; *) rm -rf "${MEDIA_DIR:-/var/lib/smilelog-tv/media}" ;; esac
+  MEDIA_DIR=$(grep '^MEDIA_DIR=' /etc/smilelog-tv.conf 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d "\"'" || true)
+  MEDIA_DIR=$(realpath -m -- "${MEDIA_DIR:-/var/lib/smilelog-tv/media}" 2>/dev/null || true)
+  # Chỉ xoá khi sâu từ 3 cấp trở lên và nằm dưới /var/lib/smilelog-tv/ hoặc /srv/.
+  case "$MEDIA_DIR" in
+    /var/lib/smilelog-tv/?*|/srv/?*/?*) rm -rf -- "$MEDIA_DIR" ;;
+    *) echo "Bỏ qua xoá MEDIA_DIR ('$MEDIA_DIR'): đường dẫn không an toàn" >&2 ;;
+  esac
   userdel --remove smilelog-tv 2>/dev/null || true
   rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key /etc/smilelog-tv.rustdesk-password
   echo "Tailscale, RustDesk vẫn giữ để còn vào máy từ xa; gỡ hẳn: sudo apt-get purge tailscale rustdesk"

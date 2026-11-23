@@ -32,14 +32,16 @@ cài LibreOffice rồi thì không tải thêm. Không dùng giao diện Ubuntu.
 
 - Định dạng: ảnh (jpg, png, gif, webp), video (mp4, webm, mkv, mov), âm thanh (mp3, m4a, wav, ogg, flac),
   PDF, PowerPoint `.pptx` và Google Slides. File `.pptx` được chuyển sang PDF nên **mất hiệu ứng động**.
-- Nạp file qua mạng bằng Tailscale: `scp file.pptx tv-xuong-1:/var/lib/smilelog-tv/media/local/`
-  hoặc `rsync -av thu-muc/ tv-xuong-1:/var/lib/smilelog-tv/media/local/`.
+- Nạp file qua mạng bằng Tailscale: `scp file.pptx pi@tv-xuong-1:/var/lib/smilelog-tv/media/local/`
+  hoặc `rsync -av thu-muc/ pi@tv-xuong-1:/var/lib/smilelog-tv/media/local/`.
+  Nếu báo không ghi được vì `local/` thuộc root: `sudo chown pi /var/lib/smilelog-tv/media/local`.
 - USB: cắm vào là file hiện trên màn Trình chiếu sau vài giây.
 - Google Slides: ghi mỗi dòng `Tên | link` vào `/var/lib/smilelog-tv/media/slides.txt`. Link phải chia sẻ
   ở chế độ "Bất kỳ ai có đường liên kết".
 - Google Drive: thư mục `drive/` (`/var/lib/smilelog-tv/media/drive`) hiện file có sẵn trong đó.
-- Điều khiển: bút trình chiếu (clicker) và bàn phím dùng phím mũi tên, Page Up, Page Down để chuyển
-  trang; **Quay lại** hoặc **Esc** về danh sách file; nút nổi **⇄** về màn hình chính.
+- Điều khiển: ảnh, video, âm thanh: **Esc** về danh sách file. PDF, PowerPoint, Google Slides: bút
+  trình chiếu (clicker) và phím mũi tên, Page Up, Page Down chuyển trang; quay lại bằng nút
+  **Quay lại** trên màn hình (hoặc nút nổi **⇄** về màn hình chính).
 - Tắt `ENABLE_MEDIA` rồi chạy lại `sudo ./install.sh` thì gỡ dịch vụ Trình chiếu; file của bạn trong
   `/var/lib/smilelog-tv/media` vẫn giữ.
 
