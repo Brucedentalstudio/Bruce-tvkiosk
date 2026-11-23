@@ -46,6 +46,7 @@
 
   const openPanel = async () => {
     wrap.classList.add('open');
+    clearTimeout(timer);
     timer = setTimeout(close, 8000);
     const r = await send('mode');
     if (r.error || !r.mode) {

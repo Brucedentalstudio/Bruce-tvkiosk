@@ -230,6 +230,16 @@ cmd_watchdog() {
       log "Máy chủ Trình chiếu không trả lời: khởi động lại smilelog-tv-media"
       systemctl restart smilelog-tv-media.service || log "Không khởi động lại được smilelog-tv-media"
     fi
+    # Trang đầu không phải Trình chiếu (ví dụ trang lỗi của Chromium khi máy chủ chưa lên) 2 lần liền: mở lại trình duyệt.
+    url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
+    case "$url" in
+      "$MEDIA_URL"*) rm -f "$STATE/fail-media-page" ;;
+      *)
+        if [ "$(bump fail-media-page)" -ge 2 ]; then
+          restart_browser "Trình chiếu: đang ở trang ngoài Trình chiếu: ${url:-<không có trang>}"
+        fi
+        ;;
+    esac
     return 0
   fi
   url=$(jq -r '[.[] | select(.type == "page")][0].url // ""' <<<"$json")
