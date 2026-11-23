@@ -9,6 +9,7 @@
 #   smilelog-tv status       xem tình trạng và log gần nhất
 #   smilelog-tv doctor       kiểm tra máy chạy được gì, chưa được gì (gửi kết quả cho người hỗ trợ)
 #   smilelog-tv update       lấy bản mới nhất từ GitHub và cài lại (timer tự chạy mỗi đêm)
+#   smilelog-tv update-check có bản mới trên GitHub thì cập nhật (timer gọi mỗi AUTO_UPDATE_CHECK_MIN phút)
 #   smilelog-tv version      bản đang chạy
 #   smilelog-tv remote [up]  Tailscale: xem tên, IP để vào từ xa; "up" đăng nhập vào mạng của lab
 #   smilelog-tv rustdesk [install]  RustDesk: xem ID và mật khẩu để điều khiển từ xa; "install" cài/nâng cấp
@@ -329,9 +330,14 @@ cmd_version() {
   fi
 }
 
+UPDATE_LOCK=${SMILELOG_TV_UPDATE_LOCK:-/run/lock/smilelog-tv-update.lock}
+
 # Lấy bản mới nhất của UPDATE_BRANCH; có thay đổi thì chạy lại install.sh của bản đó.
+# Mỗi lúc chỉ một lượt cập nhật (timer hằng ngày, kiểm tra nhanh, chạy tay): lượt đến sau bỏ qua, không chờ.
 cmd_update() {
   local repo=${UPDATE_REPO:-https://github.com/Brucedentalstudio/Bruce-tvkiosk.git} branch=${UPDATE_BRANCH:-main}
+  exec 9>"$UPDATE_LOCK"
+  flock -n 9 || { echo "Đang có lượt cập nhật khác chạy: bỏ qua lượt này" >&2; return 0; }
   if [ ! -d "$SRC/.git" ]; then
     git clone --quiet --depth 1 --branch "$branch" "$repo" "$SRC" ||
       { log "Không tải được $repo (repo private thì cần khoá deploy, xem README)"; exit 1; }
@@ -339,6 +345,8 @@ cmd_update() {
     git -C "$SRC" fetch --quiet --depth 1 origin "$branch" ||
       { log "Không tải được bản mới từ $repo"; exit 1; }
     if [ "$(git -C "$SRC" rev-parse HEAD)" = "$(git -C "$SRC" rev-parse FETCH_HEAD)" ] && [ "${1:-}" != --force ]; then
+      # Lượt kiểm tra nhanh: lượt khác vừa cài bản này; Tailscale, RustDesk để lượt hằng ngày nâng.
+      [ "${1:-}" = --check ] && return 0
       echo "Đã là bản mới nhất: $(cmd_version)"
       # Không có bản Smilelog TV mới vẫn nâng Tailscale, RustDesk nếu có bản mới.
       if command -v tailscale >/dev/null; then
@@ -351,6 +359,26 @@ cmd_update() {
   fi
   log "Cập nhật lên: $(cmd_version)"
   "$SRC/smilelog-tv/install.sh"
+}
+
+# Kiểm tra nhanh: chỉ hỏi GitHub commit mới nhất của UPDATE_BRANCH, khác bản đang chạy mới cập nhật.
+# Không có gì mới thì im lặng; mất mạng chỉ ghi một dòng cho tới khi có mạng lại.
+cmd_update_check() {
+  local branch=${UPDATE_BRANCH:-main} remote
+  # Máy chưa từng cập nhật qua git: để lượt hằng ngày tải về như trước.
+  [ -d "$SRC/.git" ] || return 0
+  remote=$(GIT_TERMINAL_PROMPT=0 timeout 60 git -C "$SRC" ls-remote origin "refs/heads/$branch" 2>/dev/null |
+    awk 'NR == 1 {print $1}') || remote=""
+  if [ -z "$remote" ]; then
+    mkdir -p "$STATE"
+    [ -f "$STATE/update-offline" ] || log "Kiểm tra bản mới: không lấy được nhánh $branch từ GitHub (mất mạng?), thử lại sau"
+    touch "$STATE/update-offline"
+    return 0
+  fi
+  rm -f "$STATE/update-offline"
+  [ "$remote" = "$(git -C "$SRC" rev-parse HEAD)" ] && return 0
+  log "Có bản mới trên $branch (${remote:0:7}): cập nhật"
+  cmd_update --check
 }
 
 TS_KEY=${SMILELOG_TV_TS_KEY:-/etc/smilelog-tv.tailscale-key}
@@ -562,9 +590,10 @@ case "${1:-}" in
   status)   cmd_status ;;
   doctor)   cmd_doctor ;;
   update)   shift; cmd_update "$@" ;;
+  update-check) cmd_update_check ;;
   version)  cmd_version ;;
   remote)   shift; cmd_remote "$@" ;;
   rustdesk) shift; cmd_rustdesk "$@" ;;
   restart)  restart_browser "theo lệnh" ;;
-  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

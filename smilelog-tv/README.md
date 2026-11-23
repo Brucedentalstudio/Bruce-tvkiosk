@@ -75,6 +75,26 @@ Repo đang **public** nên máy tự cập nhật được không cần khoá. N
 máy cần một khoá chỉ đọc (GitHub → Settings → Deploy keys) và `UPDATE_REPO` dạng
 `git@github.com:Brucedentalstudio/Bruce-tvkiosk.git`.
 
+### Tự cập nhật khi repo có thay đổi
+
+Ngoài lượt cập nhật hằng ngày, cứ mỗi `AUTO_UPDATE_CHECK_MIN` phút (mặc định 10) máy hỏi GitHub
+commit mới nhất của nhánh `UPDATE_BRANCH`. Không có gì mới thì không làm gì, không ghi dòng log nào
+của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv update`.
+
+- Gộp (merge) vào `main` là mọi máy nhận bản mới trong khoảng `AUTO_UPDATE_CHECK_MIN` phút cộng 1-3
+  phút (mặc định khoảng 10-15 phút), kể cả giữa ca.
+- Khi cài bản mới, kiosk mở lại nên **màn hình TV tối khoảng 10-30 giây**, một lần cho mỗi bản mới.
+- Lượt kiểm tra nhanh không nâng Tailscale, RustDesk: việc đó để lượt `AUTO_UPDATE_AT`.
+- Mất mạng: chỉ ghi một dòng log, không báo động; có mạng lại thì kiểm tra tiếp.
+- Mỗi lúc chỉ một lượt cập nhật chạy; lượt đến sau (hằng ngày, kiểm tra nhanh, chạy tay) bỏ qua.
+- Tắt: để trống `AUTO_UPDATE_CHECK_MIN=""` trong `/etc/smilelog-tv.conf` rồi chạy lại `sudo ./install.sh`
+  (hoặc `sudo smilelog-tv update --force`).
+- Máy đã cài từ trước không cần làm gì: lượt cập nhật kế tiếp của máy chạy `install.sh` bản mới, tự
+  thêm `AUTO_UPDATE_CHECK_MIN="10"` vào file cấu hình và tạo timer. Kiểm tra:
+  `systemctl list-timers smilelog-tv-update-check.timer`.
+- Bản mới mà `install.sh` lỗi giữa chừng thì máy không thử lại commit đó; gộp một commit sửa lỗi lên
+  `main` là máy tự nhận, hoặc chạy `sudo smilelog-tv update --force`.
+
 ## Wayland hay X11 cho kiosk
 
 Khi chạy `sudo ./install.sh` từ bàn phím, máy in bảng so sánh dưới đây và hỏi KTV chọn (Enter = giữ
