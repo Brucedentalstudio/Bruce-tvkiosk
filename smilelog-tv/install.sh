@@ -121,6 +121,8 @@ jq -n --arg t "$(cat /etc/smilelog-tv.token)" '{token: $t}' | install -m 640 -g 
 # Nút chỉ hiện trên các trang Smilelog: tên miền của TV_URL, APP_URL và APP_HOSTS (cả tên miền con).
 hosts=$(printf '%s\n' "${TV_URL:-}" "${APP_URL:-}" | sed -nE 's#^https?://([^/:]+).*#\1#p'; tr ' ' '\n' <<<"${APP_HOSTS:-}")
 matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https://" + .), ("https://*." + .) | . + "/*"' | jq -s .)
+# Chế độ Trình chiếu: trang Trình chiếu chạy ở http://127.0.0.1:MEDIA_PORT nên nút ⇄ cũng cần hiện ở đó.
+[ "${ENABLE_MEDIA:-no}" = yes ] && matches=$(jq --arg o "http://127.0.0.1:${MEDIA_PORT:-9334}/*" '. + [$o]' <<<"$matches")
 jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
   install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
 
@@ -205,6 +207,68 @@ idle-delay=uint32 0
 sleep-inactive-ac-type='nothing'
 EOF
   dconf update
+fi
+
+if [ "${ENABLE_MEDIA:-no}" = yes ]; then
+  echo "==> Chế độ Trình chiếu (slide, ảnh, video, âm thanh)"
+  MBIN=/usr/local/bin/smilelog-tv-media
+  MUI=${MEDIA_UI_DIR:-/usr/local/share/smilelog-tv/media}
+  MDIR=${MEDIA_DIR:-/var/lib/smilelog-tv/media}
+  MCACHE=${MEDIA_CACHE:-/var/cache/smilelog-tv/media}
+  if [ ! -f "$HERE/smilelog-tv-media" ] || [ ! -f "$HERE/media/index.html" ] ||
+    [ ! -f "$HERE/media/media.css" ] || [ ! -f "$HERE/media/media.js" ]; then
+    echo "    Thiếu file smilelog-tv-media hoặc media/ trong bản này: bỏ qua chế độ Trình chiếu"
+  else
+    # PowerPoint (.pptx) được LibreOffice chuyển sang PDF; video, âm thanh, PDF do Chromium của kiosk phát.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends libreoffice-impress fonts-noto-core ||
+      echo "    Không cài được LibreOffice: chưa mở được file PowerPoint"
+    install -m 755 "$HERE/smilelog-tv-media" "$MBIN"
+    install -d -m 755 "$MUI"
+    install -m 644 "$HERE/media/index.html" "$HERE/media/media.css" "$HERE/media/media.js" "$MUI/"
+    # Thư mục file: chỉ tạo khi chưa có, không đổi chủ ở các lần chạy sau (cập nhật ban đêm không có SUDO_USER).
+    ADMIN=${SUDO_USER:-}
+    id "$ADMIN" >/dev/null 2>&1 || ADMIN=root
+    install -d -m 755 "$MDIR"
+    [ -d "$MDIR/local" ] || install -d -m 755 -o "$ADMIN" "$MDIR/local"
+    [ -d "$MDIR/drive" ] || install -d -m 755 -o "$KIOSK_USER" -g "$KIOSK_USER" "$MDIR/drive"
+    if [ ! -f "$MDIR/slides.txt" ]; then
+      cat >"$MDIR/slides.txt" <<EOF
+# Mỗi dòng một bộ slide: Tên | link Google Slides
+# Link phải chia sẻ ở chế độ "Bất kỳ ai có đường liên kết". Dòng bắt đầu bằng # là ghi chú.
+# Họp giao ban sáng | https://docs.google.com/presentation/d/<ID>/edit
+# Đào tạo nhân viên mới | https://docs.google.com/presentation/d/<ID>/edit
+EOF
+      chmod 644 "$MDIR/slides.txt"
+    fi
+    install -d -m 755 -o "$KIOSK_USER" -g "$KIOSK_USER" "$MCACHE"
+    cat >"$UNITS/smilelog-tv-media.service" <<EOF
+[Unit]
+Description=Smilelog Màn TV: Trình chiếu (media)
+After=network.target
+
+[Service]
+User=$KIOSK_USER
+ExecStart=$MBIN
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable smilelog-tv-media.service
+    systemctl restart smilelog-tv-media.service
+  fi
+else
+  # Không bật Trình chiếu: gỡ dịch vụ và file cài (file của người dùng trong MEDIA_DIR vẫn giữ). Không gỡ LibreOffice.
+  if [ -e "$UNITS/smilelog-tv-media.service" ]; then
+    systemctl disable --now smilelog-tv-media.service 2>/dev/null || true
+    rm -f "$UNITS/smilelog-tv-media.service"
+    systemctl daemon-reload
+  fi
+  [ ! -e /usr/local/bin/smilelog-tv-media ] || rm -f /usr/local/bin/smilelog-tv-media
+  [ ! -d "${MEDIA_UI_DIR:-/usr/local/share/smilelog-tv/media}" ] || rm -rf "${MEDIA_UI_DIR:-/usr/local/share/smilelog-tv/media}"
+  if grep -q '^MODE="media"' "$CONF"; then sed -i 's/^MODE="media"/MODE="tv"/' "$CONF"; fi
 fi
 
 echo "==> Dịch vụ systemd"

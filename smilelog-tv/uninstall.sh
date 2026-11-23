@@ -13,6 +13,8 @@ done
 systemctl daemon-reload
 systemctl enable getty@tty1.service 2>/dev/null || true
 rm -f /usr/local/bin/smilelog-tv /usr/local/bin/smilelog-tv-control /usr/local/bin/smilelog-tv-desktop
+rm -f /usr/local/bin/smilelog-tv-media
+rm -rf /var/cache/smilelog-tv/media
 rm -f /etc/udev/rules.d/99-smilelog-tv-usb.rules /usr/local/share/applications/smilelog-tv-*.desktop
 rm -f /etc/chromium/policies/managed/smilelog-tv.json /etc/chromium-browser/policies/managed/smilelog-tv.json
 udevadm control --reload 2>/dev/null || true
@@ -33,6 +35,9 @@ CMDLINE=/boot/firmware/cmdline.txt
 if [ -f "$CMDLINE" ]; then sed -i -E 's/ ?video=HDMI-A-1:[^ ]*//g' "$CMDLINE"; fi
 
 if [ "${1:-}" = --purge ]; then
+  # File Trình chiếu của người dùng (MEDIA_DIR, có thể nằm ngoài thư mục của tài khoản kiosk).
+  MEDIA_DIR=$(grep '^MEDIA_DIR=' /etc/smilelog-tv.conf 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d '"' || true)
+  case "${MEDIA_DIR:-/var/lib/smilelog-tv/media}" in /|/var|/var/lib|/usr|/etc|/home) ;; *) rm -rf "${MEDIA_DIR:-/var/lib/smilelog-tv/media}" ;; esac
   userdel --remove smilelog-tv 2>/dev/null || true
   rm -f /etc/smilelog-tv.conf /etc/smilelog-tv.token /etc/smilelog-tv.tailscale-key /etc/smilelog-tv.rustdesk-password
   echo "Tailscale, RustDesk vẫn giữ để còn vào máy từ xa; gỡ hẳn: sudo apt-get purge tailscale rustdesk"
