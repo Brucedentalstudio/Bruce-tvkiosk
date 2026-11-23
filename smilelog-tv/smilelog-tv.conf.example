@@ -58,11 +58,13 @@ RESOLUTION="1920x1080"
 # Múi giờ của máy: giờ làm việc, màn chờ và giờ khởi động lại đều tính theo múi này.
 TIMEZONE="Asia/Ho_Chi_Minh"
 
-# Giờ làm việc: trong giờ chiếu Màn TV, ngoài giờ chiếu màn chờ (đồng hồ trôi trên nền đen)
-# để TV không lưu ảnh và không lộ số liệu khi xưởng vắng. Để trống WORK_START để luôn chiếu Màn TV.
+# Giờ làm việc. Mặc định để trống: Màn TV chiếu 24/7, mọi ngày, vì Lab làm việc suốt ngày đêm;
+# TV chỉ tối khi có người tắt TV. Chỉ site muốn màn chờ (đồng hồ trôi trên nền đen, để TV không
+# lưu ảnh và không lộ số liệu khi Lab vắng) ngoài giờ mới đặt cả WORK_START, WORK_END và WORK_DAYS.
 # WORK_DAYS: 1 = thứ 2 ... 7 = chủ nhật. Ca qua đêm thì đặt WORK_START lớn hơn WORK_END.
-WORK_START="07:00"
-WORK_END="19:30"
+# Ví dụ: WORK_START="07:00", WORK_END="19:30", WORK_DAYS="1,2,3,4,5,6".
+WORK_START=""
+WORK_END=""
 WORK_DAYS="1,2,3,4,5,6"
 
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.

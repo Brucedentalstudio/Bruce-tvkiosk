@@ -11,7 +11,7 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 | Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
 | Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do |
 | Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường | Không áp dụng |
-| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
 | Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị |
 
 **Chế độ Đào tạo** phải bật riêng, vì tải thêm khoảng 1-2 GB (giao diện GNOME, LibreOffice, phông chữ):
@@ -155,8 +155,8 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
 | Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
-| Ngoài giờ làm (`WORK_START`–`WORK_END`, `WORK_DAYS`) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
-| Vào giờ làm | Tự quay về Màn TV (trong vòng 1 phút) |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
+| Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
 | Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
@@ -175,6 +175,16 @@ sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)
 ```
+
+### Chuyển máy đang chạy sang 24/7
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf` có sẵn, nên máy đã cài vẫn giữ 07:00 đến 19:30. Để Màn TV chiếu 24/7:
+
+```bash
+sudo sed -i -E 's/^WORK_START=.*/WORK_START=""/; s/^WORK_END=.*/WORK_END=""/' /etc/smilelog-tv.conf
+```
+
+Không cần chạy lại `install.sh`: watchdog chạy mỗi phút và đọc lại file này mỗi lần, nên trong vòng 1 phút TV tự quay về Màn TV.
 
 ## Lưu ý bảo mật
 
