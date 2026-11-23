@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trình chiếu</title>
+<link rel="stylesheet" href="/static/media.css">
+</head>
+<body>
+<section id="home">
+  <header class="top">
+    <h1>Trình chiếu</h1>
+    <button class="btn" id="btnRefresh" type="button">Làm mới</button>
+    <button class="btn pri" id="btnMain" type="button">Về màn hình chính</button>
+  </header>
+  <p class="note" id="mainHint" hidden>Bấm Ctrl+Alt+M để về màn hình chính</p>
+  <div class="banner" id="banner" role="alert" hidden>Mất kết nối với máy chủ trình chiếu, đang thử lại</div>
+  <div class="grid" id="groups"></div>
+  <p class="foot">Dùng phím mũi tên hoặc bút trình chiếu để chọn, Enter để mở.</p>
+</section>
+
+<section id="player" class="player" tabindex="-1" hidden>
+  <div class="bar">
+    <button class="btn" id="pBack" type="button">Quay lại</button>
+    <div class="title" id="pTitle"></div>
+    <button class="btn" id="pAuto" type="button" aria-pressed="false" hidden>Tự chạy: Tắt</button>
+  </div>
+  <div class="stage" id="pStage"></div>
+  <div class="ctrl" id="pCtrl"></div>
+  <div class="hint">Esc để quay lại · ⇄ để về màn hình chính</div>
+</section>
+<script src="/static/media.js"></script>
+</body>
+</html>
