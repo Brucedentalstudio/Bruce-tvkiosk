@@ -219,11 +219,21 @@ cmd_watchdog() {
     done < <(jq -r '.[] | select(.type == "page") | .url' <<<"$json")
   fi
 
-  # Chế độ full: không màn chờ, không báo động trang đăng nhập (người dùng tự đăng nhập).
+  # Chế độ full: không màn chờ. Trang đăng nhập: báo động một lần như chế độ tv (Kho việc là màn chính,
+  # có thể không ai đứng trước màn), không mở lại trình duyệt; rời trang đăng nhập thì xoá cờ báo động.
   # Đứng ở màn khác (ngoài APP_PATHS), trang lỗi hoặc trang ngoài Smilelog quá 2 phút thì mở lại APP_URL.
   if [ "$MODE" = full ]; then
     if in_app_screens "$url"; then
       rm -f "$STATE"/fail-*
+      if [[ "$url" == *"$LOGIN_PATTERN"* ]]; then
+        if [ ! -f "$STATE/alerted-login" ]; then
+          alert "Kho việc đang ở trang đăng nhập, cần đăng nhập lại ($url)"
+          touch "$STATE/alerted-login"
+        fi
+      elif [ -f "$STATE/alerted-login" ]; then
+        log "Đã vào lại Kho việc"
+        rm -f "$STATE/alerted-login"
+      fi
     elif [ "$(bump fail-page)" -ge 2 ]; then
       restart_browser "đang ở màn ngoài phạm vi: ${url:-<không có trang>}"
     fi
