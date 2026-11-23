@@ -27,7 +27,7 @@ TOKEN_FILE = os.environ.get("SMILELOG_TV_TOKEN", "/etc/smilelog-tv.token")
 PORT = int(os.environ.get("SMILELOG_TV_CONTROL_PORT", "9333"))
 SOCKET = os.environ.get("SMILELOG_TV_SOCKET", "/run/smilelog-tv/control.sock")
 SOCKET_GROUP = os.environ.get("SMILELOG_TV_SOCKET_GROUP", "daotao")
-MODE_RE = re.compile(r"^(tv|full|training)$")
+MODE_RE = re.compile(r"^(tv|full|training|media)$")
 COOLDOWN = 5  # giây: bấm lặp trong lúc trình duyệt đang mở lại thì bỏ qua
 
 # Mã phím Linux (linux/input-event-codes.h), khai báo sẵn để không phụ thuộc evdev khi chạy thử.

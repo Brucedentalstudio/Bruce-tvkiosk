@@ -3,7 +3,7 @@
 (() => {
   if (window.top !== window || document.getElementById('smilelog-tv-switch')) return;
 
-  const LABEL = { tv: 'Màn TV', full: 'Danh sách ca & Kho việc', training: 'Đào tạo (Ubuntu, LibreOffice)' };
+  const LABEL = { tv: 'Màn TV', full: 'Danh sách ca & Kho việc', training: 'Đào tạo (Ubuntu, LibreOffice)', media: 'Trình chiếu' };
   const host = document.createElement('div');
   host.id = 'smilelog-tv-switch';
   host.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483647';
@@ -44,7 +44,7 @@
   const close = () => { wrap.classList.remove('open'); msg.hidden = true; clearTimeout(timer); };
   const say = (text) => { msg.textContent = text; msg.hidden = false; };
 
-  $('.pill').addEventListener('click', async () => {
+  const openPanel = async () => {
     wrap.classList.add('open');
     timer = setTimeout(close, 8000);
     const r = await send('mode');
@@ -66,7 +66,8 @@
       });
       targets.appendChild(b);
     }
-  });
+  };
+  $('.pill').addEventListener('click', openPanel);
   $('.restart').addEventListener('click', async () => {
     const r = await send('restart');
     say(r.ok ? 'Đang mở lại trình duyệt…' : 'Không mở lại được.');
@@ -74,4 +75,12 @@
   $('.close').addEventListener('click', close);
 
   document.documentElement.appendChild(host);
+
+  // Trang Trình chiếu (http://127.0.0.1:<cổng>) nhờ mở bảng này qua postMessage; trang Smilelog không đổi gì.
+  if (location.protocol === 'http:' && location.hostname === '127.0.0.1') {
+    window.addEventListener('message', (e) => {
+      if (e.origin === location.origin && e.source === window && e.data && e.data.type === 'smilelog-tv:open-switch-panel') openPanel();
+    });
+    window.postMessage({ type: 'smilelog-tv:switch-panel-ready' }, location.origin);
+  }
 })();
