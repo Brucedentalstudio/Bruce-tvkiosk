@@ -278,7 +278,12 @@ EOF
       MSYNC=${MEDIA_DRIVE_SYNC_MIN:-15}
       case "$MSYNC" in "" | *[!0-9]* | 0) MSYNC=15 ;; esac
       # Tài khoản kiosk ghi drive-sync.json vào MEDIA_DIR.
-      chown "$KIOSK_USER:$KIOSK_USER" "$MDIR"
+      # Chỉ đổi quyền khi đường dẫn an toàn (như uninstall.sh); root giữ chủ, nhóm kiosk ghi được, bit sticky bảo vệ local/ và slides.txt.
+      MSAFE=$(realpath -m -- "$MDIR" 2>/dev/null || true)
+      case "$MSAFE" in
+        /var/lib/smilelog-tv/?* | /srv/?*/?*) chown "root:$KIOSK_USER" "$MSAFE" && chmod 1775 "$MSAFE" ;;
+        *) echo "    Bỏ qua đổi quyền MEDIA_DIR ('$MSAFE'): đường dẫn không an toàn" >&2 ;;
+      esac
       cat >"$UNITS/smilelog-tv-drive-sync.service" <<EOF
 [Unit]
 Description=Smilelog Màn TV: đồng bộ Google Drive cho Trình chiếu
