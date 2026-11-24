@@ -1,11 +1,13 @@
-# Cấu hình máy chạy Smilelog: Màn TV (tv) hoặc Danh sách ca + Kho việc (full).
+# Cấu hình máy chạy Smilelog: Kho việc (full, màn chính), Màn TV (tv), Đào tạo (training), Trình chiếu (media).
 # install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
-# Chế độ chạy. Đổi nhanh bằng lệnh (lưu vào file này, giữ sau khi khởi động lại): sudo smilelog-tv mode tv|full
-#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo xưởng)
+# Chế độ chạy. Đổi nhanh bằng lệnh (lưu vào file này, giữ sau khi khởi động lại): sudo smilelog-tv mode tv|full|training|media
 #   full : màn chính, mặc định. Mở Kho việc (APP_URL), bấm thao tác được, xoay qua các bước khi không ai dùng.
 #          Không có màn chờ ngoài giờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo ở Lab)
+#   training: Đào tạo (cần ENABLE_TRAINING="yes")
+#   media: Trình chiếu (cần ENABLE_MEDIA="yes", xem bên dưới)
 MODE="full"
 
 # Đổi chế độ ngay trên TV, không cần SSH:
@@ -20,6 +22,25 @@ SHOW_SWITCH_BUTTON="yes"
 # đổi vòng: Màn TV -> Ca & Kho việc -> Đào tạo. Tài khoản Đào tạo không mật khẩu, không quyền quản trị.
 ENABLE_TRAINING="no"
 TRAINING_USER="daotao"
+
+# Chế độ Trình chiếu (media): chiếu slide, ảnh, video, âm thanh cho họp, đào tạo nhanh.
+# "yes" rồi chạy lại sudo ./install.sh (cài thêm LibreOffice Impress để mở PowerPoint).
+# Khi bật, nút ⇄ và Ctrl+Alt+M đổi vòng thêm chế độ Trình chiếu. Đổi nhanh: sudo smilelog-tv mode media
+ENABLE_MEDIA="no"
+# Thư mục file trên máy: local/ (nạp qua mạng bằng scp hoặc rsync), drive/ (file có sẵn từ Google Drive),
+# slides.txt (link Google Slides, mỗi dòng "Tên | link").
+MEDIA_DIR="/var/lib/smilelog-tv/media"
+# Đồng bộ Google Drive về drive/ (một chiều: file xoá trên Drive cũng xoá khỏi TV). Để trống là tắt.
+# ID thư mục: phần sau /folders/ trong đường link thư mục Google Drive. Chia sẻ thư mục đó cho email của
+# service account với quyền Người xem. Khoá JSON KHÔNG ghi ở đây: để ở /etc/smilelog-tv.drive-sa.json
+# (chmod 600, chủ root), xem README.
+MEDIA_DRIVE_FOLDER_ID=""
+# Số phút giữa hai lần đồng bộ.
+MEDIA_DRIVE_SYNC_MIN="15"
+# Nơi USB được gắn khi cắm vào (khớp quy tắc USB của install.sh).
+MEDIA_USB_DIR="/media/usb"
+# Cổng của dịch vụ Trình chiếu, chỉ nghe trong máy (127.0.0.1).
+MEDIA_PORT="9334"
 
 # In phiếu, QR: thêm máy in bằng: sudo smilelog-tv printer add TÊN IP
 # "yes": bấm In là in thẳng ra máy in mặc định, không hiện hộp chọn máy in.

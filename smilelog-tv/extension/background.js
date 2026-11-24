@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     chrome.tabs.remove(sender.tab.id);
     return false;
   }
-  const method = msg && /^mode\/(tv|full|training)$/.test(msg.action) ? 'POST' : ACTIONS[msg && msg.action];
+  const method = msg && /^mode\/(tv|full|training|media)$/.test(msg.action) ? 'POST' : ACTIONS[msg && msg.action];
   if (!method) return false;
   (async () => {
     try {

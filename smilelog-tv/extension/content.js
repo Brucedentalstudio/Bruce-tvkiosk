@@ -3,7 +3,7 @@
 (() => {
   if (window.top !== window || document.getElementById('smilelog-tv-switch')) return;
 
-  const LABEL = { full: 'Kho việc (màn chính)', tv: 'Màn TV sản xuất', training: 'Đào tạo (Ubuntu, LibreOffice)' };
+  const LABEL = { full: 'Kho việc (màn chính)', tv: 'Màn TV sản xuất', training: 'Đào tạo (Ubuntu, LibreOffice)', media: 'Trình chiếu' };
   const host = document.createElement('div');
   host.id = 'smilelog-tv-switch';
   host.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483647';
@@ -44,8 +44,9 @@
   const close = () => { wrap.classList.remove('open'); msg.hidden = true; clearTimeout(timer); };
   const say = (text) => { msg.textContent = text; msg.hidden = false; };
 
-  $('.pill').addEventListener('click', async () => {
+  const openPanel = async () => {
     wrap.classList.add('open');
+    clearTimeout(timer);
     timer = setTimeout(close, 8000);
     const r = await send('mode');
     if (r.error || !r.mode) {
@@ -68,7 +69,8 @@
       });
       targets.appendChild(b);
     }
-  });
+  };
+  $('.pill').addEventListener('click', openPanel);
   $('.restart').addEventListener('click', async () => {
     const r = await send('restart');
     say(r.ok ? 'Đang mở lại trình duyệt…' : 'Không mở lại được.');
@@ -76,7 +78,18 @@
   $('.close').addEventListener('click', close);
 
   // Tiện ích luôn chạy (để chống lưu ảnh); SHOW_SWITCH_BUTTON="no" thì chỉ ẩn nút.
-  send('settings').then((s) => { if (s.switch_button !== false) document.documentElement.appendChild(host); });
+  send('settings').then((s) => {
+    if (s.switch_button === false) return;
+    document.documentElement.appendChild(host);
+    // Trang Trình chiếu (http://127.0.0.1:<cổng>) nhờ mở bảng này qua postMessage; trang Smilelog không đổi gì.
+    // Nút bị ẩn thì không báo sẵn sàng: trang Trình chiếu tự hiện gợi ý Ctrl+Alt+M.
+    if (location.protocol === 'http:' && location.hostname === '127.0.0.1') {
+      window.addEventListener('message', (e) => {
+        if (e.origin === location.origin && e.source === window && e.data && e.data.type === 'smilelog-tv:open-switch-panel') openPanel();
+      });
+      window.postMessage({ type: 'smilelog-tv:switch-panel-ready' }, location.origin);
+    }
+  });
 })();
 
 // Chống lưu ảnh cho màn hình sáng 24/7 và xoay bước Kho việc. Giá trị lấy từ /etc/smilelog-tv.conf qua
@@ -107,6 +120,9 @@
     }
   });
   const on = () => !!cfg.mode && cfg.mode !== 'training';
+  // Trang Trình chiếu: chỉ chống lưu ảnh ở danh sách file; đang phát (video, slide, ảnh) thì tắt hết, không phủ màn chờ.
+  const mediaPage = location.protocol === 'http:' && location.hostname === '127.0.0.1';
+  const playing = () => { const p = mediaPage && document.getElementById('player'); return !!p && !p.hidden; };
   const idle = () => Date.now() - lastInput >= IDLE_MS;
 
   // 1. Dời cả trang vài điểm ảnh. Không dùng transform trên html/body: phần tử fixed (thanh trên, menu)
@@ -277,7 +293,7 @@
 
   function tick() {
     const now = Date.now();
-    if (!on()) {
+    if (!on() || playing()) {
       unshift();
       removeSaver();
       setDim(false);

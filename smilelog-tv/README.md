@@ -3,16 +3,16 @@
 Biến một máy tính nhỏ cắm vào cổng HDMI của TV thành màn hình kiosk chạy Smilelog. Bật điện là
 tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục.
 
-## Ba chế độ
+## Bốn chế độ
 
-| | `tv` | `full` (mặc định, màn chính Kho việc) | `training` (Đào tạo) |
-|---|---|---|---|
-| Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản |
-| Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB |
-| Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do |
-| Trang đăng nhập | Báo động: TV bị văng phiên | Báo động một lần, không mở lại trình duyệt | Không áp dụng |
-| Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ |
-| Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị |
+| | `tv` | `full` (mặc định, màn chính Kho việc) | `training` (Đào tạo) | `media` (Trình chiếu) |
+|---|---|---|---|---|
+| Dùng cho | TV treo ở Lab, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản | Chiếu slide, ảnh, video, âm thanh cho họp, đào tạo nhanh |
+| Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB | Màn Trình chiếu liệt kê file từ USB, Google Drive, thư mục trên máy, link Google Slides |
+| Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do | Tự do, không tự quay về khi đang phát |
+| Trang đăng nhập | Báo động: TV bị văng phiên | Báo động một lần, không mở lại trình duyệt | Không áp dụng | Không áp dụng |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ | Không có màn chờ |
+| Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị | Không cần |
 
 **Chế độ Đào tạo** phải bật riêng, vì tải thêm khoảng 1-2 GB (giao diện GNOME, LibreOffice, phông chữ):
 đặt `ENABLE_TRAINING="yes"` trong `/etc/smilelog-tv.conf` rồi chạy `sudo ./install.sh`. Thanh bên trái
@@ -24,6 +24,50 @@ Calc, File, **Quay về Ca & Kho việc**, **Quay về Màn TV**.
 - Bút trình chiếu không dây (clicker) dùng được ngay: nó gửi phím chuyển trang như bàn phím.
 - Rời chế độ Đào tạo là đóng toàn bộ phiên đang mở: **lưu file trước khi chuyển**.
 
+### Chế độ Trình chiếu
+
+Bật riêng: đặt `ENABLE_MEDIA="yes"` trong `/etc/smilelog-tv.conf` rồi chạy `sudo ./install.sh`. Lần đầu
+cài thêm LibreOffice Impress (để mở PowerPoint) và phông chữ, khoảng vài trăm MB. Chế độ Đào tạo đã
+cài LibreOffice rồi thì không tải thêm. Không dùng giao diện Ubuntu.
+
+- Định dạng: ảnh (jpg, png, gif, webp), video (mp4, webm, mkv, mov), âm thanh (mp3, m4a, wav, ogg, flac),
+  PDF, PowerPoint `.pptx` và Google Slides. File `.pptx` được chuyển sang PDF nên **mất hiệu ứng động**.
+- Nạp file qua mạng bằng Tailscale: `scp file.pptx pi@tv-xuong-1:/var/lib/smilelog-tv/media/local/`
+  hoặc `rsync -av thu-muc/ pi@tv-xuong-1:/var/lib/smilelog-tv/media/local/`.
+  Nếu báo không ghi được vì `local/` thuộc root: `sudo chown pi /var/lib/smilelog-tv/media/local`.
+- USB: cắm vào là file hiện trên màn Trình chiếu sau vài giây.
+- Google Slides: ghi mỗi dòng `Tên | link` vào `/var/lib/smilelog-tv/media/slides.txt`. Link phải chia sẻ
+  ở chế độ "Bất kỳ ai có đường liên kết".
+- Google Drive: thư mục `drive/` (`/var/lib/smilelog-tv/media/drive`) hiện file đồng bộ từ Drive, xem mục "Đồng bộ Google Drive" bên dưới.
+- Điều khiển: ảnh, video, âm thanh: **Esc** về danh sách file. PDF, PowerPoint, Google Slides: bút
+  trình chiếu (clicker) và phím mũi tên, Page Up, Page Down chuyển trang; quay lại bằng nút
+  **Quay lại** trên màn hình (hoặc nút nổi **⇄** về màn hình chính).
+- Tắt `ENABLE_MEDIA` rồi chạy lại `sudo ./install.sh` thì gỡ dịch vụ Trình chiếu; file của bạn trong
+  `/var/lib/smilelog-tv/media` vẫn giữ.
+
+#### Đồng bộ Google Drive
+
+Cài một lần trên Google, rồi mỗi TV chỉ cần khoá và ID thư mục:
+
+1. Vào Google Cloud Console, tạo project.
+2. Bật Google Drive API.
+3. Tạo service account (không cần cấp vai trò).
+4. Tạo khoá JSON, tải về máy quản lý.
+5. Mở thư mục Google Drive, Chia sẻ cho email của service account (dạng `...@...iam.gserviceaccount.com`) với quyền **Người xem**.
+6. Lấy ID thư mục từ đường link (phần sau `/folders/`), đặt `MEDIA_DRIVE_FOLDER_ID` trong `/etc/smilelog-tv.conf`.
+7. Trên từng TV: `sudo install -m 600 /dev/stdin /etc/smilelog-tv.drive-sa.json` (dán nội dung khoá, Enter, Ctrl+D),
+   hoặc chép file qua Tailscale rồi `sudo install -m 600 drive-sa.json /etc/smilelog-tv.drive-sa.json` và xoá bản chép.
+   Sau đó chạy `sudo ./install.sh`.
+
+- Không dán khoá vào chat, không ghi vào `/etc/smilelog-tv.conf`, không đưa lên GitHub.
+- Đồng bộ mỗi `MEDIA_DRIVE_SYNC_MIN` phút (mặc định 15), một chiều: file xoá trên Drive cũng xoá khỏi TV.
+- Google Slides được tải về dạng `.pptx`.
+- Xem kết quả: `sudo smilelog-tv doctor`. Đồng bộ ngay: `sudo smilelog-tv drive-sync`.
+- Để trống `MEDIA_DRIVE_FOLDER_ID` hoặc tắt `ENABLE_MEDIA` rồi chạy lại `sudo ./install.sh` thì gỡ timer đồng bộ
+  (file trong `drive/` và khoá vẫn giữ).
+- Kiểm trên máy thật (chưa kiểm chứng): remote rclone dựng bằng biến môi trường, thư mục chỉ chia sẻ cho service
+  account (Người xem) liệt kê được không cần `--drive-shared-with-me`, và rclone không báo lỗi khi thiếu file cấu hình.
+
 Muốn thêm màn cho chế độ `full` thì thêm đường dẫn vào `APP_PATHS` trong `/etc/smilelog-tv.conf`,
 ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
@@ -32,9 +76,9 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 | Cách | Thao tác |
 |---|---|
 | **Nút nổi** ⇄ góc dưới bên trái | Bấm ⇄ để mở bảng, bấm **"Chuyển sang …"** (một nút cho mỗi chế độ khác) để xác nhận. Bảng có thêm **"Mở lại trình duyệt"**, tự đóng sau 8 giây |
-| **Phím tắt** (cắm bàn phím USB hoặc không dây) | **Ctrl+Alt+M** đổi vòng Màn TV → Ca & Kho việc → Đào tạo → Màn TV; **Ctrl+Alt+R** mở lại trình duyệt. Dùng được cả trong chế độ Đào tạo |
+| **Phím tắt** (cắm bàn phím USB hoặc không dây) | **Ctrl+Alt+M** đổi vòng Màn TV → Ca & Kho việc → Đào tạo → Trình chiếu → Màn TV (bỏ qua chế độ chưa bật); **Ctrl+Alt+R** mở lại trình duyệt. Dùng được cả trong chế độ Đào tạo |
 | **Biểu tượng** trong chế độ Đào tạo | **Quay về Ca & Kho việc**, **Quay về Màn TV** trên thanh bên trái |
-| **SSH** | `sudo smilelog-tv mode tv`, `mode full`, `mode training`, `mode toggle`, hoặc `mode` để xem chế độ hiện tại |
+| **SSH** | `sudo smilelog-tv mode tv`, `mode full`, `mode training`, `mode media`, `mode toggle`, hoặc `mode` để xem chế độ hiện tại |
 
 - Màn hình tải lại trong vài giây sau khi đổi. Bấm lặp trong 5 giây đó bị bỏ qua, nên không đổi
   nhầm hai lần.
@@ -97,8 +141,10 @@ của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv u
 - Bản mới mà `install.sh` lỗi giữa chừng (ví dụ apt đang bận, mất điện lúc cài) thì lượt kiểm tra sau
   thử lại, tối đa 3 lần cho mỗi commit. Lỗi đủ 3 lần thì máy chờ commit mới hơn, hoặc chạy
   `sudo smilelog-tv update --force`. Lỗi trước bước mở lại kiosk thì màn hình không tối.
-- Bản mới có `smilelog-tv`, `install.sh` hoặc `uninstall.sh` lỗi cú pháp (`bash -n`) thì máy không cài,
-  giữ bản đang chạy, ghi một dòng log và chờ commit sửa (nhớ cả qua khởi động lại).
+- Bản mới có `smilelog-tv`, `install.sh` hoặc `uninstall.sh` lỗi cú pháp (`bash -n`), hoặc `smilelog-tv-media`
+  lỗi cú pháp Python, thì máy không cài, giữ bản đang chạy, ghi một dòng log và chờ commit sửa (nhớ cả qua khởi động lại).
+- Đang ở chế độ Trình chiếu thì lượt kiểm tra nhanh bỏ qua, không mở lại trình duyệt giữa buổi chiếu; bản mới
+  được cài ở lượt `AUTO_UPDATE_AT` hoặc khi chuyển sang chế độ khác.
 
 ## Wayland hay X11 cho kiosk
 
@@ -190,7 +236,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 Máy cài mới mặc định `MODE="full"`: bật lên vào **Kho việc** (`APP_URL`). Màn TV sản xuất vẫn chọn được bằng nút ⇄.
 
-Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv` và `full`), và xoay bước ở Kho việc:
+Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv`, `full`, và `media` chỉ ở danh sách file, không bao giờ khi đang phát), và xoay bước ở Kho việc:
 
 | Việc | Tuỳ chọn (mặc định) | Tắt |
 |---|---|---|
@@ -220,7 +266,7 @@ Lệnh này ghi `MODE="full"` vào `/etc/smilelog-tv.conf` (giữ sau khi khởi
 ```bash
 sudo smilelog-tv status     # trang đang mở, lịch hẹn giờ, 20 dòng log gần nhất
 sudo smilelog-tv restart    # mở lại trình duyệt
-sudo smilelog-tv mode full  # đổi chế độ (tv | full | training | toggle)
+sudo smilelog-tv mode full  # đổi chế độ (tv | full | training | media | toggle)
 sudo smilelog-tv doctor     # kiểm tra máy, gửi kết quả cho người hỗ trợ
 sudo smilelog-tv update     # cập nhật ngay từ GitHub
 sudo smilelog-tv printer list  # máy in (add TÊN IP | default TÊN | test)
