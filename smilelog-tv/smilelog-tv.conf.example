@@ -1,13 +1,14 @@
-# Cấu hình máy chạy Smilelog: Màn TV (tv) hoặc Danh sách ca + Kho việc (full).
+# Cấu hình máy chạy Smilelog: Kho việc (full, màn chính), Màn TV (tv), Đào tạo (training), Trình chiếu (media).
 # install.sh chép file này sang /etc/smilelog-tv.conf nếu chưa có.
 # Sửa /etc/smilelog-tv.conf xong thì chạy lại: sudo ./install.sh
 
-# Chế độ chạy. Đổi nhanh bằng lệnh: sudo smilelog-tv mode tv|full
-#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (TV treo xưởng)
+# Chế độ chạy. Đổi nhanh bằng lệnh (lưu vào file này, giữ sau khi khởi động lại): sudo smilelog-tv mode tv|full|training|media
+#   full : màn chính, mặc định. Mở Kho việc (APP_URL), bấm thao tác được, xoay qua các bước khi không ai dùng.
+#          Không có màn chờ ngoài giờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
+#   tv   : chỉ chiếu Màn TV sản xuất, ngoài giờ làm chuyển sang màn chờ (nếu đặt giờ làm) (TV treo ở Lab)
+#   training: Đào tạo (cần ENABLE_TRAINING="yes")
 #   media: Trình chiếu (cần ENABLE_MEDIA="yes", xem bên dưới)
-#   full : máy trạm có bàn phím, chuột, chạy Danh sách ca và Kho việc để thao tác.
-#          Không có màn chờ. Mở màn khác ngoài APP_PATHS quá 2 phút thì quay về APP_URL.
-MODE="tv"
+MODE="full"
 
 # Đổi chế độ ngay trên TV, không cần SSH:
 #   - Phím tắt (cắm bàn phím USB hoặc bàn phím không dây): Ctrl+Alt+M đổi chế độ,
@@ -78,21 +79,47 @@ RESOLUTION="1920x1080"
 # Múi giờ của máy: giờ làm việc, màn chờ và giờ khởi động lại đều tính theo múi này.
 TIMEZONE="Asia/Ho_Chi_Minh"
 
-# Giờ làm việc: trong giờ chiếu Màn TV, ngoài giờ chiếu màn chờ (đồng hồ trôi trên nền đen)
-# để TV không lưu ảnh và không lộ số liệu khi xưởng vắng. Để trống WORK_START để luôn chiếu Màn TV.
+# Giờ làm việc. Mặc định để trống: Màn TV chiếu 24/7, mọi ngày, vì Lab làm việc suốt ngày đêm;
+# TV chỉ tối khi có người tắt TV. Chỉ site muốn màn chờ (đồng hồ trôi trên nền đen, để TV không
+# lưu ảnh và không lộ số liệu khi Lab vắng) ngoài giờ mới đặt cả WORK_START, WORK_END và WORK_DAYS.
 # WORK_DAYS: 1 = thứ 2 ... 7 = chủ nhật. Ca qua đêm thì đặt WORK_START lớn hơn WORK_END.
-WORK_START="07:00"
-WORK_END="19:30"
+# Ví dụ: WORK_START="07:00", WORK_END="19:30", WORK_DAYS="1,2,3,4,5,6".
+WORK_START=""
+WORK_END=""
 WORK_DAYS="1,2,3,4,5,6"
 
+# Chống lưu ảnh cho màn hình sáng 24/7 (chế độ tv và full). Để trống hoặc 0 để tắt từng mục.
+# Đổi xong không cần chạy lại install.sh: trang đang mở tự đọc lại trong vòng 1 phút.
+# Dời cả trang lên/sang trái tối đa BURNIN_SHIFT_PX điểm ảnh, mỗi BURNIN_SHIFT_MIN phút.
+BURNIN_SHIFT_MIN="5"
+BURNIN_SHIFT_PX="4"
+# Màn chờ đồng hồ BURNIN_SAVER_SEC giây, mỗi BURNIN_SAVER_EVERY_MIN phút (tối thiểu 5). Không tải lại trang.
+# Có người bấm, chạm, gõ phím trong 2 phút qua thì hoãn; chạm vào màn chờ là tắt ngay.
+BURNIN_SAVER_EVERY_MIN="60"
+BURNIN_SAVER_SEC="60"
+# Làm tối ban đêm từ DIM_START tới DIM_END (qua đêm được), độ tối DIM_LEVEL (0.05 đến 0.8).
+# Trang vẫn đọc và bấm được. Để trống DIM_START để tắt.
+DIM_START="22:00"
+DIM_END="05:00"
+DIM_LEVEL="0.3"
+
+# Chế độ full: Kho việc tự xoay qua các bước, mỗi bước KHO_ROTATE_SEC giây (để trống hoặc 0 để tắt).
+# Có người bấm, chạm, gõ phím thì dừng; rảnh 2 phút thì xoay tiếp từ bước đang đứng.
+# KHO_ROTATE_STAGES: mã bước viết hoa, cách nhau bởi dấu phẩy, không dấu cách. MAU = Mẫu, CAM = CAM máy,
+# CAMNGUOI = CAM nguội, SU = Sứ. Bước máy chủ chưa có cho tài khoản đó thì tự bỏ qua.
+# Ví dụ chỉ xoay CAD và Sứ: KHO_ROTATE_STAGES="CAD,SU".
+KHO_ROTATE_SEC="30"
+KHO_ROTATE_STAGES="MAU,CAD,CAM,CAMNGUOI,SU,COMPOSITE,QC"
+
 # Hẹn giờ bật/tắt hẳn TV qua HDMI-CEC (Samsung gọi là Anynet+). Chỉ chạy trên Raspberry Pi.
-# Mặc định để trống: TV luôn bật, ngoài giờ đã có màn chờ.
+# Mặc định để trống: không điều khiển bật/tắt TV; Màn TV chiếu 24/7.
 SCREEN_ON=""
 SCREEN_OFF=""
 SCREEN_DAYS="Mon..Sat"
 
-# Khởi động lại máy mỗi đêm để dọn bộ nhớ. Để trống để tắt.
-REBOOT_AT="03:30"
+# Khởi động lại máy mỗi ngày để dọn bộ nhớ. Mặc định 19:00 (giờ Bruce chọn) vì Lab làm việc 24/7:
+# màn hình tối khoảng 1 phút, ca đêm vẫn có Màn TV. Để trống để tắt.
+REBOOT_AT="19:00"
 
 # Vào máy từ xa qua Tailscale (SSH, xem màn hình kiosk). install.sh tự cài và bật tự cập nhật.
 # Đăng nhập tự động: đặt khoá đăng nhập (Tailscale admin -> Settings -> Keys -> Generate auth key)
@@ -110,11 +137,17 @@ TAILSCALE_HOSTNAME=""
 ENABLE_RUSTDESK="yes"
 RUSTDESK_VERSION=""
 
-# Cập nhật từ xa: mỗi đêm máy lấy bản mới nhất từ GitHub và tự cài lại (trước giờ REBOOT_AT).
+# Cập nhật từ xa: mỗi ngày máy lấy bản mới nhất từ GitHub và tự cài lại; màn hình tối 10-30 giây khi có bản mới,
+# nên đặt trước giờ REBOOT_AT để gộp vào lúc khởi động lại.
 # Cập nhật ngay: sudo smilelog-tv update. Để trống AUTO_UPDATE_AT để tắt tự cập nhật.
 UPDATE_REPO="https://github.com/Brucedentalstudio/Bruce-tvkiosk.git"
 UPDATE_BRANCH="main"
-AUTO_UPDATE_AT="02:30"
+AUTO_UPDATE_AT="18:30"
+
+# Kiểm tra bản mới mỗi AUTO_UPDATE_CHECK_MIN phút: nhánh UPDATE_BRANCH có commit mới thì cài ngay, không
+# đợi lượt AUTO_UPDATE_AT (màn hình tối 10-30 giây khi kiosk mở lại). Không có gì mới thì không làm gì.
+# Để trống để tắt.
+AUTO_UPDATE_CHECK_MIN="10"
 
 # Webhook nhận báo động (POST JSON {"text": "..."}), ví dụ Make, n8n, Slack.
 # Để trống thì chỉ ghi log (xem bằng: smilelog-tv status).

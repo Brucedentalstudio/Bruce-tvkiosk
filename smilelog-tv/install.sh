@@ -43,6 +43,8 @@ echo "==> Cấu hình"
 added=""
 while IFS= read -r line; do
   key=${line%%=*}
+  # Cấu hình cũ chưa có MODE vẫn chạy Màn TV (như smilelog-tv); chỉ máy cài mới mặc định Kho việc.
+  [ "$key" = MODE ] && line='MODE="tv"'
   grep -q "^$key=" "$CONF" || added+="$line"$'\n'
 done < <(grep -E '^[A-Z_]+=' "$HERE/smilelog-tv.conf.example")
 if [ -n "$added" ]; then
@@ -327,7 +329,7 @@ else
   fi
   [ ! -e /usr/local/bin/smilelog-tv-media ] || rm -f /usr/local/bin/smilelog-tv-media
   [ ! -d "${MEDIA_UI_DIR:-/usr/local/share/smilelog-tv/media}" ] || rm -rf "${MEDIA_UI_DIR:-/usr/local/share/smilelog-tv/media}"
-  if grep -q '^MODE="media"' "$CONF"; then sed -i 's/^MODE="media"/MODE="tv"/' "$CONF"; fi
+  if grep -q '^MODE="media"' "$CONF"; then sed -i 's/^MODE="media"/MODE="full"/' "$CONF"; fi
 fi
 
 echo "==> Dịch vụ systemd"
@@ -451,6 +453,41 @@ else
 fi
 schedule reboot "${REBOOT_AT:-}" "/bin/systemctl reboot" "khởi động lại"
 schedule update "${AUTO_UPDATE_AT-02:30}" "/usr/local/bin/smilelog-tv update" "cập nhật từ GitHub"
+# Kiểm tra nhanh bản mới trên GitHub mỗi AUTO_UPDATE_CHECK_MIN phút. Giá trị trống thì gỡ timer.
+CHECK_MIN=${AUTO_UPDATE_CHECK_MIN-10}
+if [ -n "$CHECK_MIN" ] && ! [[ "$CHECK_MIN" =~ ^0*[1-9][0-9]*$ ]]; then
+  echo "    AUTO_UPDATE_CHECK_MIN=\"$CHECK_MIN\" không phải số phút: tắt kiểm tra nhanh, còn lượt cập nhật hằng ngày"
+  CHECK_MIN=""
+fi
+if [ -n "$CHECK_MIN" ]; then
+  cat >"$UNITS/smilelog-tv-update-check.service" <<EOF
+[Unit]
+Description=Smilelog Màn TV: kiểm tra bản mới trên GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/smilelog-tv update-check
+EOF
+  cat >"$UNITS/smilelog-tv-update-check.timer" <<EOF
+[Unit]
+Description=Smilelog Màn TV: kiểm tra bản mới mỗi $CHECK_MIN phút
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=${CHECK_MIN}min
+RandomizedDelaySec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now smilelog-tv-update-check.timer ||
+    echo "    Không bật được timer kiểm tra bản mới: còn lượt cập nhật hằng ngày"
+else
+  systemctl disable --now smilelog-tv-update-check.timer 2>/dev/null || true
+  rm -f "$UNITS/smilelog-tv-update-check.service" "$UNITS/smilelog-tv-update-check.timer"
+  systemctl daemon-reload
+fi
 
 echo "==> Độ phân giải"
 # Trên Raspberry Pi, tham số video= trong cmdline.txt đặt chế độ hình cho cổng HDMI0 từ lúc khởi động.

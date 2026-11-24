@@ -5,13 +5,13 @@ tự vào Smilelog, mất điện hay trình duyệt treo thì tự hồi phục
 
 ## Bốn chế độ
 
-| | `tv` (mặc định) | `full` | `training` (Đào tạo) | `media` (Trình chiếu) |
+| | `tv` | `full` (mặc định, màn chính Kho việc) | `training` (Đào tạo) | `media` (Trình chiếu) |
 |---|---|---|---|---|
-| Dùng cho | TV treo xưởng, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản | Chiếu slide, ảnh, video, âm thanh cho họp, đào tạo nhanh |
+| Dùng cho | TV treo ở Lab, chỉ để xem | Máy trạm ở quầy, bàn điều phối | Đào tạo nội bộ, slide đơn giản | Chiếu slide, ảnh, video, âm thanh cho họp, đào tạo nhanh |
 | Màn hình | Màn TV (`/production-tv`) | **Danh sách ca** (`/orders`) và **Kho việc** (`/kho-viec`), kể cả trang con | Giao diện Ubuntu bình thường: LibreOffice, Chromium, mở file từ USB | Màn Trình chiếu liệt kê file từ USB, Google Drive, thư mục trên máy, link Google Slides |
 | Bấm sang màn khác | Sau 2 phút tự quay về Màn TV | Sau 2 phút tự quay về `APP_URL` | Tự do | Tự do, không tự quay về khi đang phát |
-| Trang đăng nhập | Báo động: TV bị văng phiên | Bình thường | Không áp dụng | Không áp dụng |
-| Ngoài giờ làm | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ | Không có màn chờ |
+| Trang đăng nhập | Báo động: TV bị văng phiên | Báo động một lần, không mở lại trình duyệt | Không áp dụng | Không áp dụng |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`/`WORK_END`; mặc định Màn TV 24/7) | Màn chờ đồng hồ | Không có màn chờ | Không khoá, không tự ngủ | Không có màn chờ |
 | Tài khoản | Tài khoản Smilelog chỉ được xem | Tài khoản Smilelog của từng người | Tài khoản máy `daotao`, không mật khẩu, không quyền quản trị | Không cần |
 
 **Chế độ Đào tạo** phải bật riêng, vì tải thêm khoảng 1-2 GB (giao diện GNOME, LibreOffice, phông chữ):
@@ -102,7 +102,7 @@ ví dụ `APP_PATHS="/orders /kho-viec /today/mine"`.
 
 | Việc | Cách |
 |---|---|
-| **Cập nhật** | Mỗi đêm lúc `AUTO_UPDATE_AT` (mặc định 02:30) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
+| **Cập nhật** | Mỗi ngày lúc `AUTO_UPDATE_AT` (mặc định 18:30, trước giờ khởi động lại) máy tự lấy bản mới nhất từ GitHub (`UPDATE_REPO`, nhánh `UPDATE_BRANCH`) và cài lại. Cập nhật ngay: `sudo smilelog-tv update`. Xem bản đang chạy: `smilelog-tv version` |
 | **Kiểm tra máy** | `sudo smilelog-tv doctor`: liệt kê từng mục OK / CHÚ Ý / LỖI (trình duyệt, kiosk, nút, phím tắt, máy in, USB, chế độ Đào tạo, mạng). Gửi kết quả cho người hỗ trợ |
 | **Vào máy từ xa (Tailscale)** | `install.sh` tự cài Tailscale, bật SSH qua Tailscale và tự cập nhật. Đưa máy vào mạng của lab một lần, chọn một trong hai cách: (1) đặt khoá đăng nhập vào `/etc/smilelog-tv.tailscale-key` rồi chạy lại `install.sh`; (2) chạy `sudo smilelog-tv remote up` và mở đường link hiện ra trên điện thoại. Sau đó từ laptop có Tailscale ở bất kỳ đâu: `ssh tv-xuong-1` rồi gõ lệnh `smilelog-tv` như ngồi tại chỗ. Không cần mở cổng trên router. Xem tên, IP: `smilelog-tv remote` |
 | **Xem và bấm màn hình kiosk từ xa** | Qua Tailscale: `ssh -L 9222:127.0.0.1:9222 tv-xuong-1`, mở Chrome trên laptop vào `chrome://inspect`, bấm **inspect** trang đang mở: thấy đúng màn hình TV và bấm, gõ được |
@@ -118,6 +118,33 @@ cho phép tài khoản quản lý SSH vào máy có tag này.
 Repo đang **public** nên máy tự cập nhật được không cần khoá. Nếu chuyển repo sang **private**, mỗi
 máy cần một khoá chỉ đọc (GitHub → Settings → Deploy keys) và `UPDATE_REPO` dạng
 `git@github.com:Brucedentalstudio/Bruce-tvkiosk.git`.
+
+### Tự cập nhật khi repo có thay đổi
+
+Ngoài lượt cập nhật hằng ngày, cứ mỗi `AUTO_UPDATE_CHECK_MIN` phút (mặc định 10) máy hỏi GitHub
+commit mới nhất của nhánh `UPDATE_BRANCH`. Không có gì mới thì không làm gì, không ghi dòng log nào
+của Smilelog TV. Có commit mới thì máy cài ngay như `sudo smilelog-tv update`.
+
+- Gộp (merge) vào `main` là mọi máy nhận bản mới trong khoảng `AUTO_UPDATE_CHECK_MIN` phút cộng 1-3
+  phút (mặc định khoảng 10-15 phút), kể cả giữa ca.
+- Khi cài bản mới, kiosk mở lại nên **màn hình TV tối khoảng 10-30 giây**, một lần cho mỗi bản mới.
+- Không có bản mới thì lượt kiểm tra nhanh không nâng Tailscale, RustDesk: việc đó để lượt
+  `AUTO_UPDATE_AT`. Có bản mới thì `install.sh` chạy như mọi lần cài, nên RustDesk có thể được nâng
+  ngay lúc đó, kể cả giữa ca.
+- Mất mạng: chỉ ghi một dòng log, không báo động; có mạng lại thì kiểm tra tiếp.
+- Mỗi lúc chỉ một lượt cập nhật chạy; lượt đến sau (hằng ngày, kiểm tra nhanh, chạy tay) bỏ qua.
+- Tắt: để trống `AUTO_UPDATE_CHECK_MIN=""` trong `/etc/smilelog-tv.conf` rồi chạy lại `sudo ./install.sh`
+  (hoặc `sudo smilelog-tv update --force`).
+- Máy đã cài từ trước không cần làm gì: lượt cập nhật kế tiếp của máy chạy `install.sh` bản mới, tự
+  thêm `AUTO_UPDATE_CHECK_MIN="10"` vào file cấu hình và tạo timer. Kiểm tra:
+  `systemctl list-timers smilelog-tv-update-check.timer`.
+- Bản mới mà `install.sh` lỗi giữa chừng (ví dụ apt đang bận, mất điện lúc cài) thì lượt kiểm tra sau
+  thử lại, tối đa 3 lần cho mỗi commit. Lỗi đủ 3 lần thì máy chờ commit mới hơn, hoặc chạy
+  `sudo smilelog-tv update --force`. Lỗi trước bước mở lại kiosk thì màn hình không tối.
+- Bản mới có `smilelog-tv`, `install.sh` hoặc `uninstall.sh` lỗi cú pháp (`bash -n`), hoặc `smilelog-tv-media`
+  lỗi cú pháp Python, thì máy không cài, giữ bản đang chạy, ghi một dòng log và chờ commit sửa (nhớ cả qua khởi động lại).
+- Đang ở chế độ Trình chiếu thì lượt kiểm tra nhanh bỏ qua, không mở lại trình duyệt giữa buổi chiếu; bản mới
+  được cài ở lượt `AUTO_UPDATE_AT` hoặc khi chuyển sang chế độ khác.
 
 ## Wayland hay X11 cho kiosk
 
@@ -145,7 +172,7 @@ nhất là cắm thêm một máy chạy Linux vào HDMI. TV chỉ còn làm vi�
 | **Mini PC cũ chip Intel** (ví dụ Dell OptiPlex 3050 **Micro**, i3/i5 đời 7, RAM 8 GB, SSD) | Ổ SSD bền hơn thẻ nhớ, dư sức, card Intel chạy tốt trên Linux | Phải bật **AC Recovery = Power On** trong BIOS; không có HDMI-CEC |
 | **Raspberry Pi 5 (4 GB)** + nguồn 27W, tản nhiệt có quạt, thẻ nhớ loại chịu ghi liên tục | Máy mới có bảo hành, có điện là tự lên, bật/tắt TV qua HDMI-CEC | Thẻ nhớ kém bền hơn SSD; cần cáp micro-HDMI |
 
-TV để bật liên tục và ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
+TV để bật liên tục và (nếu đặt giờ làm) ngoài giờ chuyển sang màn chờ thì không cần HDMI-CEC: hai loại máy đều dùng
 được, chọn loại rẻ hơn ở thời điểm mua. Tránh máy có card đồ hoạ rời (ví dụ HP Z2 Mini có Quadro):
 tốn điện và dễ lỗi driver với giao diện kiosk.
 
@@ -194,16 +221,45 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 
 | Tình huống | Xử lý |
 |---|---|
-| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `TV_URL` |
+| Bật điện, mất điện rồi có lại | Tự mở Chromium toàn màn hình vào `APP_URL` (Kho việc, chế độ `full`) hoặc `TV_URL` (chế độ `tv`) |
 | Mất mạng ngắn | Smilelog tự hiện "Mất kết nối" và tự tải lại sau 10 phút |
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
-| Hết phiên, đang ở trang đăng nhập | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích |
-| Ngoài giờ làm (`WORK_START`–`WORK_END`, `WORK_DAYS`) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi xưởng vắng |
-| Vào giờ làm | Tự quay về Màn TV (trong vòng 1 phút) |
+| Hết phiên, đang ở trang đăng nhập (chế độ `tv` và `full`) | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích; rời trang đăng nhập thì lần sau lại báo |
+| Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi Lab vắng |
+| Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
 | Tuỳ chọn: tắt hẳn TV theo giờ | `SCREEN_ON` / `SCREEN_OFF` qua HDMI-CEC (chỉ Raspberry Pi; mặc định không dùng) |
 | Xuất hình | Ép **1080p** (`RESOLUTION`) để Pi chạy mát, mượt; để trống thì dùng độ phân giải của TV |
-| Mỗi đêm | Khởi động lại máy lúc `REBOOT_AT` |
+| Mỗi ngày | Khởi động lại máy lúc `REBOOT_AT` (mặc định 19:00, giờ Bruce chọn; màn hình tối khoảng 1 phút) |
+
+## Màn chính Kho việc và chống lưu ảnh
+
+Máy cài mới mặc định `MODE="full"`: bật lên vào **Kho việc** (`APP_URL`). Màn TV sản xuất vẫn chọn được bằng nút ⇄.
+
+Màn hình sáng 24/7 nên tiện ích trong trình duyệt tự làm 3 việc (chế độ `tv`, `full`, và `media` chỉ ở danh sách file, không bao giờ khi đang phát), và xoay bước ở Kho việc:
+
+| Việc | Tuỳ chọn (mặc định) | Tắt |
+|---|---|---|
+| Dời cả trang lên/sang trái vài điểm ảnh, thanh trên và menu dời theo | `BURNIN_SHIFT_MIN="5"` phút, `BURNIN_SHIFT_PX="4"` | `BURNIN_SHIFT_MIN=""` |
+| Màn chờ đồng hồ phủ lên trang rồi về đúng trang cũ, không tải lại. Có người dùng trong 2 phút qua thì hoãn; chạm hoặc gõ phím là tắt ngay | `BURNIN_SAVER_EVERY_MIN="60"`, `BURNIN_SAVER_SEC="60"` | `BURNIN_SAVER_EVERY_MIN=""` |
+| Làm tối ban đêm, trang vẫn bấm được | `DIM_START="22:00"`, `DIM_END="05:00"`, `DIM_LEVEL="0.3"` | `DIM_START=""` |
+| Kho việc xoay qua các bước (chỉ `full`); có người dùng thì dừng, rảnh 2 phút thì xoay tiếp | `KHO_ROTATE_SEC="30"`, `KHO_ROTATE_STAGES="MAU,CAD,CAM,CAMNGUOI,SU,COMPOSITE,QC"` (MAU = Mẫu, CAM = CAM máy, CAMNGUOI = CAM nguội). Chỉ xoay qua bước Kho việc của máy chủ đang có cho tài khoản đó | `KHO_ROTATE_SEC=""` |
+
+Sửa các dòng này trong `/etc/smilelog-tv.conf` là đủ: trang đang mở đọc lại trong vòng 1 phút, không cần người tại chỗ. Ví dụ chỉ xoay CAD và Sứ, mỗi bước 1 phút:
+
+```bash
+sudo sed -i -E 's/^KHO_ROTATE_STAGES=.*/KHO_ROTATE_STAGES="CAD,SU"/; s/^KHO_ROTATE_SEC=.*/KHO_ROTATE_SEC="60"/' /etc/smilelog-tv.conf
+```
+
+### Chuyển máy đang chạy sang Kho việc
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf`, nên máy đã cài vẫn giữ `MODE` cũ (thường là `tv`). Vào máy từ xa (Tailscale SSH) rồi chạy:
+
+```bash
+sudo smilelog-tv mode full
+```
+
+Lệnh này ghi `MODE="full"` vào `/etc/smilelog-tv.conf` (giữ sau khi khởi động lại) và mở lại trình duyệt ngay vào Kho việc. Các tuỳ chọn chống lưu ảnh ở trên được thêm vào file cấu hình với giá trị mặc định ở lần cập nhật kế tiếp (`smilelog-tv update` chạy lại `install.sh`).
 
 ## Lệnh hay dùng
 
@@ -219,6 +275,28 @@ sudo smilelog-tv screen off # tắt TV ngay (screen on để bật)
 sudo ./install.sh           # chạy lại sau khi sửa /etc/smilelog-tv.conf
 sudo ./uninstall.sh         # gỡ, giữ phiên đăng nhập (--purge để xoá hết)
 ```
+
+### Chuyển máy đang chạy sang 24/7
+
+`install.sh` không ghi đè `/etc/smilelog-tv.conf` có sẵn, nên máy đã cài vẫn giữ 07:00 đến 19:30. Để Màn TV chiếu 24/7:
+
+```bash
+sudo sed -i -E 's/^WORK_START=.*/WORK_START=""/; s/^WORK_END=.*/WORK_END=""/' /etc/smilelog-tv.conf
+```
+
+Không cần chạy lại `install.sh`: watchdog chạy mỗi phút và đọc lại file này mỗi lần, nên trong vòng 1 phút TV tự quay về Màn TV.
+
+Để đổi giờ khởi động lại về 19:00 và giờ cập nhật về 18:30 (máy cũ đang để 03:30 và 02:30), sửa file rồi chạy lại `install.sh`, vì hẹn giờ là timer systemd do `install.sh` ghi ra, chỉ sửa file cấu hình thì chưa đổi:
+
+```bash
+sudo sed -i -E 's/^REBOOT_AT=.*/REBOOT_AT="19:00"/; s/^AUTO_UPDATE_AT=.*/AUTO_UPDATE_AT="18:30"/' /etc/smilelog-tv.conf
+sudo smilelog-tv update --force
+systemctl list-timers 'smilelog-tv-reboot.timer' 'smilelog-tv-update.timer'   # kiểm tra: 19:00 và 18:30
+```
+
+Lệnh `update --force` lấy bản mới nhất của nhánh `main` trên GitHub rồi chạy lại `install.sh` để ghi lại các timer. Nếu `install.sh` hỏi "Chọn 1 hoặc 2", bấm Enter để giữ cách vẽ màn hình hiện tại. Kiosk khởi động lại nên màn hình tối khoảng 10-30 giây.
+
+Hoặc chạy `sudo ./install.sh` trong thư mục đã chép lên máy lúc cài.
 
 ## Lưu ý bảo mật
 
