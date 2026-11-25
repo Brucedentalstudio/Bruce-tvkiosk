@@ -249,7 +249,7 @@
     if (!want && dim) { dim.remove(); dim = null; }
   }
 
-  // 4. Xoay bước Kho việc (?stage=KEY). Vue Router: đổi URL tại chỗ rồi báo popstate để trang tự lọc lại,
+  // 4. Xoay bước Kho việc (#/kho-viec?stage=KEY). Vue Router: đổi URL tại chỗ rồi báo popstate để trang tự lọc lại,
   // không tải lại trang. Trang không có Vue Router thì mở lại URL (replace, không làm dài lịch sử).
   // Chỉ xoay qua bước máy chủ có cho tài khoản này (cùng danh sách chip của Kho việc), theo thứ tự trong
   // cấu hình; hỏi lại mỗi 10 phút. Không hỏi được thì dùng nguyên danh sách cấu hình.
@@ -275,14 +275,30 @@
     if (!offered) return conf;
     return conf.map((k) => offered.find((o) => o.toUpperCase() === k.toUpperCase())).filter(Boolean);
   }
+  // Route của trang: Smilelog để route sau dấu # (https://smilelog.vn/#/kho-viec?stage=CAD), nên đường dẫn
+  // và tham số nằm trong location.hash; trang dùng đường dẫn thường thì lấy pathname và search như cũ.
+  function route() {
+    const hashed = location.hash.startsWith('#/');
+    const r = new URL(hashed ? location.hash.slice(1) : location.pathname + location.search, location.origin);
+    return {
+      path: r.pathname,
+      params: r.searchParams,
+      href() {
+        const q = r.searchParams.toString();
+        const tail = r.pathname + (q ? `?${q}` : '');
+        return hashed ? `${location.pathname}${location.search}#${tail}` : tail + location.hash;
+      },
+    };
+  }
   function rotate() {
     const list = rotationList();
     lastRotate = Date.now();
     if (!list.length) return;
-    const url = new URL(location.href);
-    const cur = (url.searchParams.get('stage') || '').toUpperCase();
-    url.searchParams.set('stage', list[(list.findIndex((k) => k.toUpperCase() === cur) + 1) % list.length]);
-    url.searchParams.delete('holder'); // như khi bấm chip: đổi bước thì bỏ người giữ
+    const r = route();
+    const cur = (r.params.get('stage') || '').toUpperCase();
+    r.params.set('stage', list[(list.findIndex((k) => k.toUpperCase() === cur) + 1) % list.length]);
+    r.params.delete('holder'); // như khi bấm chip: đổi bước thì bỏ người giữ
+    const url = r.href();
     if (history.state && typeof history.state === 'object' && 'position' in history.state) {
       history.replaceState(null, '', url);
       dispatchEvent(new PopStateEvent('popstate', { state: null }));
@@ -317,7 +333,7 @@
       showSaver(); // vừa có người dùng thì hoãn, hiện ngay khi rảnh 2 phút
     }
     setDim(nightNow());
-    const kho = /^\/kho-viec\/?$/.test(location.pathname);
+    const kho = /^\/kho-viec\/?$/.test(route().path);
     if (cfg.mode === 'full' && kho && cfg.rotate_sec && cfg.rotate_stages && cfg.rotate_stages.length) {
       // Màn chờ đang hiện: dừng, sau đó bước hiện tại được chiếu đủ một lượt. Có người dùng: dừng tới khi
       // rảnh 2 phút rồi xoay tiếp từ bước đang đứng.
