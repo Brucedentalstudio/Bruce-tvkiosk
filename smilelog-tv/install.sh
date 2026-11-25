@@ -135,7 +135,12 @@ hosts=$(printf '%s\n' "${TV_URL:-}" "${APP_URL:-}" | sed -nE 's#^https?://([^/:]
 matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https://" + .), ("https://*." + .) | . + "/*"' | jq -s .)
 # Chế độ Trình chiếu: trang Trình chiếu chạy ở http://127.0.0.1:MEDIA_PORT nên nút ⇄ cũng cần hiện ở đó.
 [ "${ENABLE_MEDIA:-no}" = yes ] && matches=$(jq --arg o "http://127.0.0.1:${MEDIA_PORT:-9334}/*" '. + [$o]' <<<"$matches")
-jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
+# Chromium giữ background.js cũ của tiện ích (service worker đã đăng ký trong hồ sơ) cho tới khi số phiên bản
+# trong manifest đổi: cài bản mới mà giữ "1.0" thì nút ⇄ vẫn chạy mã cũ, không chuyển được sang chế độ mới.
+# Mỗi lần cài đặt một số phiên bản mới theo giờ cài (mỗi phần tối đa 65535, không có số 0 đứng đầu).
+ext_version="1.$(date +%y%j).$((10#$(date +%H%M))).$((10#$(date +%S)))"
+jq --argjson m "$matches" --arg v "$ext_version" '.content_scripts[0].matches = $m | .version = $v' \
+  "$HERE/extension/manifest.template.json" |
   install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
 
 if [ "${ENABLE_TAILSCALE:-yes}" = yes ]; then
