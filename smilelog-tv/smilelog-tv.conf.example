@@ -47,18 +47,21 @@ MEDIA_PORT="9334"
 KIOSK_PRINTING="no"
 
 # --- Chế độ full ---
-# Trang mở khi bật máy: Kho việc. Đổi thành .../orders nếu muốn mở Danh sách ca trước.
-APP_URL="https://smilelog.vn/kho-viec"
-# Các màn được phép, cách nhau bởi dấu cách. Tính cả trang con (/orders/123, /orders/new)
-# và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
+# Trang mở khi bật máy: Kho việc. Đổi thành .../#/orders nếu muốn mở Danh sách ca trước.
+# Smilelog dùng đường dẫn sau dấu #: thiếu # thì máy chủ trả về trang lỗi.
+APP_URL="https://smilelog.vn/#/kho-viec"
+# Các màn được phép (phần sau dấu #), cách nhau bởi dấu cách. Tính cả trang con (/orders/123,
+# /orders/new) và trang đăng nhập. Danh sách ca = /orders, Kho việc = /kho-viec.
 APP_PATHS="/orders /kho-viec"
 # Tên miền của Smilelog, cách nhau bởi dấu cách (khớp cả tên miền con).
 # Để trống thì lấy tên miền của APP_URL.
 APP_HOSTS=""
 
 # --- Chế độ tv ---
-# Trang mở khi bật máy. Kiểm tra lại tên miền Prod trước khi dùng.
-TV_URL="https://smilelog.vn/production-tv"
+# Trang mở khi bật máy. Smilelog dùng đường dẫn sau dấu #: thiếu # thì máy chủ trả về 404.
+# Thêm ?zone=<mã khu> để TV chỉ chiếu một khu, ví dụ ...#/production-tv?zone=62BD-T2 (62BĐ Tầng 2);
+# không có zone thì chiếu toàn lab.
+TV_URL="https://smilelog.vn/#/production-tv"
 
 # Đường dẫn được coi là "đúng màn". Trang khác (lỗi mạng, trang lạ) bị watchdog mở lại.
 EXPECTED_PATH="/production-tv"

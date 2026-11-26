@@ -51,6 +51,16 @@ if [ -n "$added" ]; then
   printf '\n# Tuỳ chọn mới thêm khi cập nhật (giải thích trong smilelog-tv.conf.example)\n%s' "$added" >>"$CONF"
   echo "    Đã thêm tuỳ chọn mới vào $CONF: $(echo "$added" | cut -d= -f1 | tr '\n' ' ')"
 fi
+# Mặc định cũ thiếu dấu # nên Smilelog trả về trang lỗi. Chỉ sửa đúng giá trị mặc định cũ;
+# giá trị đã sửa tay (ví dụ có ?zone=) giữ nguyên.
+for fix in 'TV_URL|https://smilelog.vn/production-tv|https://smilelog.vn/#/production-tv' \
+  'APP_URL|https://smilelog.vn/kho-viec|https://smilelog.vn/#/kho-viec'; do
+  IFS='|' read -r key old new <<<"$fix"
+  if grep -qxF "$key=\"$old\"" "$CONF"; then
+    sed -i "s|^$key=\"$old\"\$|$key=\"$new\"|" "$CONF"
+    echo "    Đã sửa $key thành $new"
+  fi
+done
 # shellcheck source=smilelog-tv.conf.example
 . "$CONF"
 install -m 755 "$HERE/smilelog-tv" /usr/local/bin/smilelog-tv
@@ -125,7 +135,12 @@ hosts=$(printf '%s\n' "${TV_URL:-}" "${APP_URL:-}" | sed -nE 's#^https?://([^/:]
 matches=$(printf '%s\n' "$hosts" | sort -u | jq -R 'select(length > 0) | ("https://" + .), ("https://*." + .) | . + "/*"' | jq -s .)
 # Chế độ Trình chiếu: trang Trình chiếu chạy ở http://127.0.0.1:MEDIA_PORT nên nút ⇄ cũng cần hiện ở đó.
 [ "${ENABLE_MEDIA:-no}" = yes ] && matches=$(jq --arg o "http://127.0.0.1:${MEDIA_PORT:-9334}/*" '. + [$o]' <<<"$matches")
-jq --argjson m "$matches" '.content_scripts[0].matches = $m' "$HERE/extension/manifest.template.json" |
+# Chromium giữ background.js cũ của tiện ích (service worker đã đăng ký trong hồ sơ) cho tới khi số phiên bản
+# trong manifest đổi: cài bản mới mà giữ "1.0" thì nút ⇄ vẫn chạy mã cũ, không chuyển được sang chế độ mới.
+# Mỗi lần cài đặt một số phiên bản mới theo giờ cài (mỗi phần tối đa 65535, không có số 0 đứng đầu).
+ext_version="1.$(date +%y%j).$((10#$(date +%H%M))).$((10#$(date +%S)))"
+jq --argjson m "$matches" --arg v "$ext_version" '.content_scripts[0].matches = $m | .version = $v' \
+  "$HERE/extension/manifest.template.json" |
   install -m 640 -g "$KIOSK_USER" /dev/stdin "$EXT/manifest.json"
 
 if [ "${ENABLE_TAILSCALE:-yes}" = yes ]; then
@@ -333,14 +348,8 @@ else
 fi
 
 echo "==> Dịch vụ systemd"
-if [ "$DISPLAY_SERVER" = x11 ]; then
-  KIOSK_SESSION_TYPE=x11
-  # Xorg chạy bằng tài khoản kiosk trên tty1 (phiên logind), không cần quyền root.
-  KIOSK_EXEC="/usr/bin/xinit /usr/local/bin/smilelog-tv x11-session -- /usr/bin/Xorg :0 vt1 -keeptty -nolisten tcp -s 0 -dpms"
-else
-  KIOSK_SESSION_TYPE=wayland
-  KIOSK_EXEC="/usr/bin/cage -s -- /usr/local/bin/smilelog-tv browser"
-fi
+# "smilelog-tv kiosk" chờ card đồ hoạ và mạng rồi tự mở Xorg hoặc cage theo DISPLAY_SERVER.
+if [ "$DISPLAY_SERVER" = x11 ]; then KIOSK_SESSION_TYPE=x11; else KIOSK_SESSION_TYPE=wayland; fi
 cat >"$UNITS/smilelog-tv.service" <<EOF
 [Unit]
 Description=Smilelog Màn TV (kiosk)
@@ -362,7 +371,7 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_SESSION_TYPE=$KIOSK_SESSION_TYPE
-ExecStart=$KIOSK_EXEC
+ExecStart=/usr/local/bin/smilelog-tv kiosk
 Restart=always
 RestartSec=5
 

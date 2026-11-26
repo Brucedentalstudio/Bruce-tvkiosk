@@ -1,0 +1,5 @@
+* text=auto
+
+# Mọi thứ trong smilelog-tv/ chạy trên máy TV (Linux). Giữ xuống dòng LF cả khi checkout trên
+# Windows, để scp thẳng lên máy là chạy được: bash báo lỗi "$'\r': command not found" với CRLF.
+smilelog-tv/** text eol=lf
