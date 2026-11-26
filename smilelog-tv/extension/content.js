@@ -307,6 +307,27 @@
     }
   }
 
+  // 5. Trang đăng nhập mà phiên vẫn còn. Smilelog có lúc về trang đăng nhập dù cookie phiên còn hạn, và
+  // tài khoản chỉ xem (bot TV) khi đó không đăng nhập lại được: máy chủ chặn POST /api/auth/token của tài
+  // khoản read-only đang có cookie (403). Đứng ở trang đăng nhập, không ai dùng 2 phút: hỏi /api/me, phiên
+  // còn thì tải lại trang định tới (redirectUrl); phiên hết thật thì để yên chờ người đăng nhập.
+  // Mỗi tab tải lại tối đa một lần mỗi 10 phút, để không tải lại mãi nếu trang vẫn quay về đăng nhập.
+  let lastLoginCheck = -Infinity;
+  function resumeSession() {
+    lastLoginCheck = Date.now();
+    fetch('/api/me', { credentials: 'include' })
+      .then((r) => {
+        if (!r.ok || route().path !== '/auth/login') return;
+        const KEY = 'smilelog-tv-resumed-at';
+        if (Date.now() - Number(sessionStorage.getItem(KEY) || 0) < 600000) return;
+        sessionStorage.setItem(KEY, String(Date.now()));
+        const back = route().params.get('redirectUrl') || '/';
+        history.replaceState(null, '', `${location.pathname}${location.search}#${back.startsWith('/') ? back : '/'}`);
+        location.reload();
+      })
+      .catch(() => {});
+  }
+
   function tick() {
     const now = Date.now();
     if (!on() || playing()) {
@@ -315,6 +336,7 @@
       setDim(false);
       return;
     }
+    if (!mediaPage && idle() && now - lastLoginCheck >= 30000 && route().path === '/auth/login') resumeSession();
     if (cfg.shift_min && cfg.shift_px) {
       if (now - lastShift >= cfg.shift_min * 60000) {
         const p = cfg.shift_px;

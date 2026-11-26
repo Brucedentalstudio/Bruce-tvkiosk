@@ -225,6 +225,7 @@ Phiên đăng nhập lưu trong `/var/lib/smilelog-tv/profile`, nên khởi đ�
 | Mất mạng ngắn | Smilelog tự hiện "Mất kết nối" và tự tải lại sau 10 phút |
 | Trang lỗi mạng, trang trắng, ai đó bấm sang trang khác | Watchdog mở lại trình duyệt sau 2 phút |
 | Trình duyệt treo, không phản hồi | Watchdog mở lại sau 3 phút |
+| Đang ở trang đăng nhập dù phiên vẫn còn (ví dụ lúc mở trang chưa hỏi được máy chủ) | Không ai dùng 2 phút thì tiện ích hỏi `/api/me`: phiên còn thì tải lại trang định tới, tối đa một lần mỗi 10 phút. Cần vì tài khoản chỉ xem đang có cookie thì máy chủ trả 403 khi đăng nhập lại |
 | Hết phiên, đang ở trang đăng nhập (chế độ `tv` và `full`) | **Báo động một lần** qua webhook và log; không khởi động lại vì việc đó vô ích; rời trang đăng nhập thì lần sau lại báo |
 | Ngoài giờ làm (chỉ khi đặt `WORK_START`–`WORK_END`, `WORK_DAYS`; mặc định để trống thì Màn TV 24/7) | Chuyển sang **màn chờ**: đồng hồ và ngày trên nền đen, đổi chỗ mỗi phút để TV không lưu ảnh, không lộ số liệu khi Lab vắng |
 | Vào giờ làm (chỉ khi đặt giờ làm; mặc định Màn TV 24/7) | Tự quay về Màn TV (trong vòng 1 phút) |
